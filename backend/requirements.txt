@@ -9,6 +9,7 @@ python-multipart==0.0.20
 # Database
 sqlalchemy==2.0.41
 aiosqlite==0.21.0
+psycopg2-binary==2.9.9
 
 # Data & ML
 pandas==2.3.0
