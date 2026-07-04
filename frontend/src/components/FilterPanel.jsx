@@ -41,9 +41,11 @@ export default function FilterPanel({
             className="bg-white border border-gray-300 text-gray-800 text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#00543B] focus:border-[#00543B] outline-none font-medium shadow-sm transition-all"
           >
             <option value="">All Products</option>
-            <option value="Personal Loan">Personal Loan</option>
+            <option value="Micro-Credit Line">Micro-Credit Line</option>
             <option value="Auto Loan">Auto Loan</option>
+            <option value="Personal Loan">Personal Loan</option>
             <option value="Home Loan">Home Loan</option>
+            <option value="Retail Credit Card">Retail Credit Card</option>
           </select>
         </div>
 
