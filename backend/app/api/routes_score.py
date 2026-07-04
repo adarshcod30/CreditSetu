@@ -121,47 +121,48 @@ def generate_data(
     # Generate transactions
     transactions_df = generate_all_transactions(customers_df, seed=request.seed)
 
-    # Store customers
+    # Store customers using bulk insert
+    customer_records = []
     for _, row in customers_df.iterrows():
-        customer = Customer(
-            customer_id=row["customer_id"],
-            name=row["name"],
-            age=int(row["age"]),
-            gender=row["gender"],
-            occupation=row["occupation"],
-            persona_type=row["persona_type"],
-            bureau_score=row["bureau_score"] if row["bureau_score"] is not None else None,
-            city=row["city"],
-            account_open_date=row["account_open_date"],
-            monthly_income=float(row["monthly_income"]),
-            emi_count=int(row["emi_count"]),
-            total_emi=float(row["total_emi"]),
-            true_repayment_capacity=float(row["true_repayment_capacity"]),
-            life_events=json.dumps(row["life_events"]),
-            observation_months=int(row["observation_months"]),
-        )
-        db.add(customer)
+        customer_records.append({
+            "customer_id": row["customer_id"],
+            "name": row["name"],
+            "age": int(row["age"]),
+            "gender": row["gender"],
+            "occupation": row["occupation"],
+            "persona_type": row["persona_type"],
+            "bureau_score": row["bureau_score"] if row["bureau_score"] is not None else None,
+            "city": row["city"],
+            "account_open_date": row["account_open_date"],
+            "monthly_income": float(row["monthly_income"]),
+            "emi_count": int(row["emi_count"]),
+            "total_emi": float(row["total_emi"]),
+            "true_repayment_capacity": float(row["true_repayment_capacity"]),
+            "life_events": json.dumps(row["life_events"]),
+            "observation_months": int(row["observation_months"]),
+        })
+    db.bulk_insert_mappings(Customer, customer_records)
     db.commit()
 
-    # Store transactions
-    batch_size = 5000
-    txn_records = transactions_df.to_dict("records")
+    # Store transactions in batches using bulk insert
+    batch_size = 50000
+    txn_records = []
+    for _, row in transactions_df.iterrows():
+        txn_records.append({
+            "txn_id": row["txn_id"],
+            "customer_id": row["customer_id"],
+            "date": row["date"],
+            "amount": float(row["amount"]),
+            "type": row["type"],
+            "category": row.get("category"),
+            "counterparty": row.get("counterparty"),
+            "channel": row.get("channel"),
+            "narration": row.get("narration"),
+            "is_bounce": bool(row.get("is_bounce", False)),
+        })
     for i in range(0, len(txn_records), batch_size):
         batch = txn_records[i:i + batch_size]
-        for row in batch:
-            txn = Transaction(
-                txn_id=row["txn_id"],
-                customer_id=row["customer_id"],
-                date=row["date"],
-                amount=float(row["amount"]),
-                type=row["type"],
-                category=row.get("category"),
-                counterparty=row.get("counterparty"),
-                channel=row.get("channel"),
-                narration=row.get("narration"),
-                is_bounce=bool(row.get("is_bounce", False)),
-            )
-            db.add(txn)
+        db.bulk_insert_mappings(Transaction, batch)
         db.commit()
 
     # Feature engineering
