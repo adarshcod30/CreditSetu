@@ -41,6 +41,9 @@ export const api = {
   getLatestBenchmark: () =>
     client.get('/api/benchmark/latest'),
 
+  getDbStats: () =>
+    client.get('/api/customers/db-stats/summary'),
+
   // Health
   healthCheck: () =>
     client.get('/api/health'),

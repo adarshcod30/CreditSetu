@@ -1,9 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Wallet } from 'lucide-react';
+import { LayoutDashboard, BarChart3, Wallet, Database } from 'lucide-react';
 import LeadDashboard from './pages/LeadDashboard';
 import CustomerDetail from './pages/CustomerDetail';
 import BenchmarkView from './pages/BenchmarkView';
+import DataArchitectureView from './pages/DataArchitectureView';
 
 function NavItem({ to, icon, label }) {
   return (
@@ -54,6 +55,7 @@ export default function App() {
               <nav className="flex items-center gap-2">
                 <NavItem to="/" icon={<LayoutDashboard className="w-4.5 h-4.5" />} label="Lead Dashboard" />
                 <NavItem to="/benchmarks" icon={<BarChart3 className="w-4.5 h-4.5" />} label="Benchmarks" />
+                <NavItem to="/data-engine" icon={<Database className="w-4.5 h-4.5" />} label="Data Engine" />
               </nav>
 
               {/* System status tags */}
@@ -76,6 +78,7 @@ export default function App() {
             <Route path="/" element={<LeadDashboard />} />
             <Route path="/customer/:customerId" element={<CustomerDetail />} />
             <Route path="/benchmarks" element={<BenchmarkView />} />
+            <Route path="/data-engine" element={<DataArchitectureView />} />
           </Routes>
         </main>
 

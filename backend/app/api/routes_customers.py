@@ -100,3 +100,49 @@ def get_customer(customer_id: str, db: Session = Depends(get_db)):
             for t in transactions
         ],
     )
+
+
+@router.get("/db-stats/summary")
+def get_db_stats_summary(db: Session = Depends(get_db)):
+    """Get aggregated statistics about the seeded synthetic database."""
+    from sqlalchemy import func
+    from ..models.score import Score
+
+    total_customers = db.query(Customer).count()
+    total_transactions = db.query(Transaction).count()
+    total_scores = db.query(Score).count()
+
+    # Persona distribution
+    persona_counts = (
+        db.query(Customer.persona_type, func.count(Customer.customer_id))
+        .group_by(Customer.persona_type)
+        .all()
+    )
+    persona_dist = {persona: count for persona, count in persona_counts}
+
+    # Transaction category distribution
+    category_counts = (
+        db.query(Transaction.category, func.count(Transaction.id))
+        .group_by(Transaction.category)
+        .all()
+    )
+    category_dist = {category: count for category, count in category_counts}
+
+    # Bounces
+    total_bounces = db.query(Transaction).filter(Transaction.is_bounce == True).count()
+
+    # Bureau Score Status (New to Credit / Thin File vs. Bureau History)
+    ntc_count = db.query(Customer).filter(Customer.bureau_score == None).count()
+    has_bureau_count = total_customers - ntc_count
+
+    return {
+        "total_customers": total_customers,
+        "total_transactions": total_transactions,
+        "total_scores": total_scores,
+        "persona_distribution": persona_dist,
+        "category_distribution": category_dist,
+        "total_bounces": total_bounces,
+        "ntc_count": ntc_count,
+        "has_bureau_count": has_bureau_count,
+        "avg_transactions_per_customer": round(total_transactions / total_customers, 1) if total_customers > 0 else 0,
+    }
