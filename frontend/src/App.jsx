@@ -56,14 +56,14 @@ export default function App() {
                 <NavItem to="/benchmarks" icon={<BarChart3 className="w-4.5 h-4.5" />} label="Benchmarks" />
               </nav>
 
-              {/* Internet Banking styled tag */}
+              {/* System status tags */}
               <div className="flex items-center gap-3">
-                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-[#138B7B]/10 rounded-full border border-[#138B7B]/20">
-                  <div className="w-2 h-2 rounded-full bg-[#138B7B] pulse-dot" />
-                  <span className="text-xs font-bold text-[#138B7B]">Retail Lending Hackathon</span>
+                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-emerald-700">API: Connected</span>
                 </div>
-                <div className="px-3.5 py-1.5 bg-[#F37021] text-white text-xs font-bold rounded hover:bg-[#d65f1a] cursor-pointer transition-colors shadow-sm uppercase">
-                  Active Demo
+                <div className="px-3 py-1 bg-[#00543B]/10 rounded-full border border-[#00543B]/20 text-xs font-bold text-[#00543B]">
+                  Database: Seeded
                 </div>
               </div>
             </div>

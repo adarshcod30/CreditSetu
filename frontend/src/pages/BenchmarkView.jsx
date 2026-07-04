@@ -92,13 +92,14 @@ export default function BenchmarkView() {
     {
       name: 'Capacity Model',
       AUC: report.capacity_engine?.auc_roc || 0,
-      Accuracy: report.capacity_engine?.r2 || 0, // proxy
+      Precision: report.capacity_engine?.precision || 0,
+      Recall: report.capacity_engine?.recall || 0,
     },
     {
       name: 'Intent Model',
+      AUC: report.intent_engine?.auc_roc || 0,
       Precision: report.intent_engine?.precision || 0,
       Recall: report.intent_engine?.recall || 0,
-      F1: report.intent_engine?.f1 || 0,
     },
     {
       name: 'Guardrail Model',
@@ -163,9 +164,9 @@ export default function BenchmarkView() {
               <p className="text-xs text-gray-500 font-medium mb-4">Visual trade-off between True Positive Rate and False Positive Rate</p>
               <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <LineChart margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                    <XAxis dataKey="fpr" type="number" domain={[0, 1]} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -5, fontSize: 10, fill: '#64748B' }} />
+                    <XAxis dataKey="fpr" type="number" domain={[0, 1]} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -15, fontSize: 10, fill: '#64748B' }} />
                     <YAxis type="number" domain={[0, 1]} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" label={{ value: 'True Positive Rate', angle: -90, position: 'insideLeft', offset: 10, fontSize: 10, fill: '#64748B' }} />
                     <Tooltip formatter={(value) => [value, 'Rate']} />
                     
@@ -177,12 +178,12 @@ export default function BenchmarkView() {
                     
                     {/* Guardrail ROC */}
                     <Line data={guardrailRocData} type="monotone" dataKey="tpr" name="Guardrail Model" stroke="#F37021" dot={false} strokeWidth={2.5} />
-                    <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                    <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '15px' }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
-
+ 
             {/* Precision & Recall Comparison */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
               <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -192,12 +193,12 @@ export default function BenchmarkView() {
               <p className="text-xs text-gray-500 font-medium mb-4">Precision, Recall, and AUC breakdown across active models</p>
               <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RechartsBarChart data={modelMetricsData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <RechartsBarChart data={modelMetricsData} margin={{ top: 10, right: 10, left: -20, bottom: 15 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" />
                     <YAxis domain={[0, 1]} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" />
                     <Tooltip formatter={(value) => [(value * 100).toFixed(1) + '%', 'Value']} />
-                    <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                    <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', paddingTop: '10px' }} />
                     <RechartsBar dataKey="AUC" fill="#00543B" radius={[4, 4, 0, 0]} />
                     <RechartsBar dataKey="Precision" fill="#138B7B" radius={[4, 4, 0, 0]} />
                     <RechartsBar dataKey="Recall" fill="#F37021" radius={[4, 4, 0, 0]} />

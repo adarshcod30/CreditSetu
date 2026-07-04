@@ -1,6 +1,8 @@
 {
   "capacity_engine": {
     "auc_roc": 0.9918,
+    "precision": 0.9485,
+    "recall": 0.9583,
     "rmse": 2966.73,
     "r2": 0.9279,
     "n_train": 800,
@@ -11,6 +13,7 @@
     "precision": 0.3394,
     "recall": 0.4526,
     "f1": 0.3879,
+    "auc_roc": 0.459,
     "true_positives": 282,
     "false_positives": 549,
     "false_negatives": 341,
@@ -34,12 +37,12 @@
     "description": "Weighted combination of Intent (0.4) and Capacity (0.6) scores"
   },
   "latency": {
-    "avg_ms": 21.06,
-    "p50_ms": 20.98,
-    "p95_ms": 21.67,
-    "p99_ms": 23.68,
+    "avg_ms": 21.19,
+    "p50_ms": 21.05,
+    "p95_ms": 21.72,
+    "p99_ms": 26.49,
     "total_customers": 1000,
     "description": "End-to-end scoring latency per customer (measured, not estimated)"
   },
-  "generated_at": "2026-07-04T13:38:17.065742"
+  "generated_at": "2026-07-04T13:58:39.702120"
 }

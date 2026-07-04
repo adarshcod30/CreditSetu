@@ -1,6 +1,6 @@
 # CreditSetu — Benchmark Report
 
-*Generated: 2026-07-04T13:38:17.065742*
+*Generated: 2026-07-04T13:58:39.702120*
 
 > **Note**: All metrics are computed on synthetic data. In production, these would
 > be validated against actual loan repayment outcomes.
@@ -48,7 +48,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Average | 21.06ms |
-| P50 (Median) | 20.98ms |
-| P95 | 21.67ms |
-| P99 | 23.68ms |
+| Average | 21.19ms |
+| P50 (Median) | 21.05ms |
+| P95 | 21.72ms |
+| P99 | 26.49ms |

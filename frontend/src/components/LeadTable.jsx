@@ -25,9 +25,9 @@ function getTierIcon(tier) {
 export default function LeadTable({ leads, loading }) {
   const navigate = useNavigate();
 
-  if (loading) {
+  if (loading && (!leads || leads.length === 0)) {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-12 shadow-sm text-center">
+      <div className="bg-white border border-gray-200 rounded-xl p-12 shadow-sm text-center min-h-[400px] flex items-center justify-center">
         <div className="flex flex-col items-center justify-center gap-3">
           <div className="w-8 h-8 border-3 border-[#00543B]/20 border-t-[#00543B] rounded-full animate-spin" />
           <span className="text-gray-500 text-sm font-semibold">Analyzing transaction database...</span>
@@ -38,14 +38,20 @@ export default function LeadTable({ leads, loading }) {
 
   if (!leads || leads.length === 0) {
     return (
-      <div className="bg-white border border-gray-200 rounded-xl p-12 shadow-sm text-center">
+      <div className="bg-white border border-gray-200 rounded-xl p-12 shadow-sm text-center min-h-[200px] flex items-center justify-center">
         <p className="text-gray-500 font-medium">No lending leads match the selected filter criteria.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden relative min-h-[400px]">
+      {loading && (
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px] flex flex-col items-center justify-center gap-3 z-10 animate-fade-in">
+          <div className="w-8 h-8 border-3 border-[#00543B]/20 border-t-[#00543B] rounded-full animate-spin" />
+          <span className="text-gray-500 text-sm font-semibold">Refreshing records...</span>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>

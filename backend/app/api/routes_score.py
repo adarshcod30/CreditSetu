@@ -40,11 +40,21 @@ def get_score(customer_id: str, db: Session = Depends(get_db)):
         except (json.JSONDecodeError, TypeError):
             guardrail_reasons = [score.guardrail_reasons]
 
+    import math
+    def sanitize_shap_features(raw_list):
+        sanitized = []
+        for item in raw_list:
+            val = item.get("value")
+            if val is not None and isinstance(val, float) and math.isnan(val):
+                item["value"] = None
+            sanitized.append(ShapFeature(**item))
+        return sanitized
+
     shap_contributions = []
     if score.shap_contributions:
         try:
             raw = json.loads(score.shap_contributions)
-            shap_contributions = [ShapFeature(**item) for item in raw]
+            shap_contributions = sanitize_shap_features(raw)
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
@@ -52,7 +62,7 @@ def get_score(customer_id: str, db: Session = Depends(get_db)):
     if score.top_features:
         try:
             raw = json.loads(score.top_features)
-            top_features = [ShapFeature(**item) for item in raw]
+            top_features = sanitize_shap_features(raw)
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 

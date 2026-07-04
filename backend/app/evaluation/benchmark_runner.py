@@ -73,6 +73,8 @@ def run_full_benchmark(
     capacity_metrics = capacity_engine.train(features_df, customers_df, test_size=test_size)
     report["capacity_engine"] = {
         "auc_roc": capacity_metrics["auc_roc"],
+        "precision": capacity_metrics["precision"],
+        "recall": capacity_metrics["recall"],
         "rmse": capacity_metrics["rmse"],
         "r2": capacity_metrics["r2"],
         "n_train": capacity_metrics["n_train"],
@@ -91,6 +93,7 @@ def run_full_benchmark(
         "precision": intent_metrics["precision"],
         "recall": intent_metrics["recall"],
         "f1": intent_metrics["f1"],
+        "auc_roc": intent_metrics["auc_roc"],
         "true_positives": intent_metrics["true_positives"],
         "false_positives": intent_metrics["false_positives"],
         "false_negatives": intent_metrics["false_negatives"],

@@ -130,15 +130,21 @@ export default function TransactionTimeline({ transactions, changePoints }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Legend */}
-      {changePoints && changePoints.length > 0 && (
-        <div className="mt-4 flex items-center gap-4 text-xs text-gray-500 font-semibold">
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5" style={{borderTop: '2.5px dashed #F37021'}} />
-            <span>Attributed Life Event (Change-Point Detector)</span>
+      {/* Legend & Info */}
+      <div className="mt-4 flex flex-col gap-3">
+        {changePoints && changePoints.length > 0 && (
+          <div className="flex items-center gap-4 text-xs text-gray-500 font-semibold">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5" style={{borderTop: '2.5px dashed #F37021'}} />
+              <span>Attributed Life Event (Change-Point Detector)</span>
+            </div>
           </div>
+        )}
+        
+        <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-600 leading-relaxed font-medium">
+          💡 <strong className="text-gray-950">What does negative cash flow indicate?</strong> A negative net cash flow indicates that in that 7-day period, the customer's total outflows (EMIs, rent, merchant spends) exceeded their inflows. Occasional negative dips are normal around monthly billing dates, whereas persistent negative cash flow signals repayment stress.
         </div>
-      )}
+      </div>
     </div>
   );
 }

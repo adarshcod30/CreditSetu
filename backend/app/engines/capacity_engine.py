@@ -115,10 +115,18 @@ class CapacityEngine:
         except ValueError:
             auc = 0.5
 
+        # Classification precision/recall on median threshold
+        from sklearn.metrics import precision_score, recall_score
+        y_pred_binary = (y_pred > median_capacity).astype(int)
+        precision = float(precision_score(y_test_binary, y_pred_binary, zero_division=0))
+        recall = float(recall_score(y_test_binary, y_pred_binary, zero_division=0))
+
         self._train_metrics = {
             "rmse": round(rmse, 2),
             "r2": round(r2, 4),
             "auc_roc": round(auc, 4),
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
             "n_train": len(X_train),
             "n_test": len(X_test),
         }

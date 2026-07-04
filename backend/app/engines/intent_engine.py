@@ -134,6 +134,8 @@ class IntentEngine:
         tp = 0  # true positives
         fp = 0  # false positives
         fn = 0  # false negatives
+        y_true = []
+        y_scores = []
 
         for _, features_row in features_df.iterrows():
             cust_id = features_row["customer_id"]
@@ -159,14 +161,26 @@ class IntentEngine:
             fp += len(detected_set - gt_types)
             fn += len(gt_types - detected_set)
 
+            # AUC metrics gathering
+            y_true.append(1 if any(e in ("emi_closure", "income_step_up") for e in gt_types) else 0)
+            scored_res = self.score(features_row.to_dict())
+            y_scores.append(scored_res["intent_score"])
+
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+        from sklearn.metrics import roc_auc_score
+        try:
+            auc = float(roc_auc_score(y_true, y_scores))
+        except ValueError:
+            auc = 0.5
 
         return {
             "precision": round(precision, 4),
             "recall": round(recall, 4),
             "f1": round(f1, 4),
+            "auc_roc": round(auc, 4),
             "true_positives": tp,
             "false_positives": fp,
             "false_negatives": fn,

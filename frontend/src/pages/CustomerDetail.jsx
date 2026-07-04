@@ -152,7 +152,7 @@ export default function CustomerDetail() {
                   <BarChart
                     data={shapData}
                     layout="vertical"
-                    margin={{ top: 5, right: 20, left: 100, bottom: 5 }}
+                    margin={{ top: 5, right: 20, left: 120, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                     <XAxis
@@ -165,7 +165,7 @@ export default function CustomerDetail() {
                       type="category"
                       dataKey="name"
                       tick={{ fontSize: 11, fill: '#475569', fontWeight: 600 }}
-                      width={95}
+                      width={115}
                       stroke="#CBD5E1"
                     />
                     <Tooltip

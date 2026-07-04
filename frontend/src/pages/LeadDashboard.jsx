@@ -31,6 +31,7 @@ export default function LeadDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState('1');
   const [total, setTotal] = useState(0);
   const pageSize = 20;
 
@@ -75,6 +76,19 @@ export default function LeadDashboard() {
   }, [minScore, productType, showSuppressed]);
 
   const totalPages = Math.ceil(total / pageSize);
+
+  useEffect(() => {
+    setPageInput(page.toString());
+  }, [page]);
+
+  const submitPage = () => {
+    const val = parseInt(pageInput, 10);
+    if (!isNaN(val) && val >= 1 && val <= totalPages) {
+      setPage(val);
+    } else {
+      setPageInput(page.toString());
+    }
+  };
 
   // Prepare chart data from stats
   const riskChartData = stats ? [
@@ -216,7 +230,7 @@ export default function LeadDashboard() {
           <p className="text-sm text-gray-600">
             Showing {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, total)} of {total} leads
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             <button
               disabled={page <= 1}
               onClick={() => setPage(p => p - 1)}
@@ -224,9 +238,24 @@ export default function LeadDashboard() {
             >
               Previous
             </button>
-            <span className="text-sm text-gray-600 font-medium">
-              Page {page} of {totalPages}
-            </span>
+            
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-gray-600 font-medium">Page</span>
+              <input
+                type="text"
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    submitPage();
+                  }
+                }}
+                onBlur={submitPage}
+                className="w-12 px-2 py-1 text-sm font-bold text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#00543B] text-gray-800"
+              />
+              <span className="text-sm text-gray-600 font-medium">of {totalPages}</span>
+            </div>
+
             <button
               disabled={page >= totalPages}
               onClick={() => setPage(p => p + 1)}

@@ -26,20 +26,20 @@ from ..features.feature_engineering import ML_FEATURE_NAMES
 
 # Human-readable feature name mappings
 FEATURE_DISPLAY_NAMES = {
-    "income_mean": "Monthly income",
-    "income_cv": "Income stability",
-    "income_timing_cv": "Income timing regularity",
-    "gig_pattern_score": "Gig-economy income pattern",
-    "emi_to_inflow_ratio": "EMI-to-income ratio",
-    "emi_to_inflow_trend": "EMI burden trend (3-month)",
-    "concurrent_lender_count": "Number of active lenders",
-    "nach_bounce_count_6m": "NACH bounces (6 months)",
-    "nach_bounce_count_3m": "NACH bounces (3 months)",
-    "rent_consistency": "Rent payment consistency",
-    "merchant_category_entropy": "Spending diversity",
-    "monthly_surplus": "Monthly cash surplus",
-    "has_bureau_score": "Bureau score availability",
-    "bureau_score": "Bureau credit score",
+    "income_mean": "Monthly Income",
+    "income_cv": "Income Stability",
+    "income_timing_cv": "Income Regularity",
+    "gig_pattern_score": "Gig Payout Pattern",
+    "emi_to_inflow_ratio": "EMI-to-Income Ratio",
+    "emi_to_inflow_trend": "EMI Trend (3m)",
+    "concurrent_lender_count": "Active Lenders",
+    "nach_bounce_count_6m": "NACH Bounces (6m)",
+    "nach_bounce_count_3m": "NACH Bounces (3m)",
+    "rent_consistency": "Rent Consistency",
+    "merchant_category_entropy": "Spending Diversity",
+    "monthly_surplus": "Cash Surplus",
+    "has_bureau_score": "Bureau File Status",
+    "bureau_score": "Bureau Score",
 }
 
 # Templates for positive/negative contribution
@@ -182,10 +182,14 @@ class ShapExplainer:
                     # Calculate percentage impact relative to total feature shift
                     pct_impact = (raw_val / total_abs_contrib * 100) if total_abs_contrib > 0 else 0.0
                     
+                    feat_val = features.get(fname)
+                    if feat_val is not None and pd.isna(feat_val):
+                        feat_val = None
+
                     contributions.append({
                         "feature": fname,
                         "display_name": FEATURE_DISPLAY_NAMES.get(fname, fname),
-                        "value": features.get(fname),
+                        "value": feat_val,
                         "contribution": round(pct_impact, 2),  # percentage impact
                     })
 
@@ -273,6 +277,8 @@ class ShapExplainer:
         # Calculate raw heuristic contributions based on logical credit rules
         for fname in self.feature_names:
             val = features.get(fname)
+            if val is not None and pd.isna(val):
+                val = None
             contrib = 0.0
             
             if val is not None:
