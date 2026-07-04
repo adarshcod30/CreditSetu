@@ -1,0 +1,250 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, TrendingUp, ShieldAlert, BarChart3, RefreshCw } from 'lucide-react';
+import {
+  ResponsiveContainer, PieChart, Pie, Cell,
+  BarChart as RechartsBarChart, Bar as RechartsBar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+} from 'recharts';
+import api from '../api/client';
+import FilterPanel from '../components/FilterPanel';
+import LeadTable from '../components/LeadTable';
+
+function StatCard({ label, value, icon, colorClass, bgClass, subtext }) {
+  return (
+    <div className="bg-white border border-gray-200/80 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+          <p className="text-3xl font-extrabold mt-1 text-gray-900">{value}</p>
+          {subtext && <p className="text-xs text-gray-500 mt-1 font-medium">{subtext}</p>}
+        </div>
+        <div className={`p-3 rounded-xl ${bgClass} ${colorClass}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function LeadDashboard() {
+  const [leads, setLeads] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 20;
+
+  // Filters
+  const [minScore, setMinScore] = useState(0);
+  const [productType, setProductType] = useState('');
+  const [showSuppressed, setShowSuppressed] = useState(false);
+
+  const fetchLeads = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        page_size: pageSize,
+        min_score: minScore,
+        exclude_suppressed: !showSuppressed,
+      };
+      if (productType) params.product_type = productType;
+
+      const [leadsRes, statsRes] = await Promise.all([
+        api.getLeads(params),
+        api.getDashboardStats(),
+      ]);
+
+      setLeads(leadsRes.data.leads);
+      setTotal(leadsRes.data.total);
+      setStats(statsRes.data);
+    } catch (err) {
+      console.error('Failed to fetch leads:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, minScore, productType, showSuppressed]);
+
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [minScore, productType, showSuppressed]);
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  // Prepare chart data from stats
+  const riskChartData = stats ? [
+    { name: 'Safe Leads', value: stats.safe_count, color: '#138B7B' },
+    { name: 'Watch List', value: stats.watch_count, color: '#F37021' },
+    { name: 'Risk Suppressed', value: stats.suppressed_count, color: '#E8452D' },
+  ].filter(d => d.value > 0) : [];
+
+  const productChartData = stats ? Object.entries(stats.product_distribution).map(([name, value]) => ({
+    name,
+    value,
+  })).sort((a, b) => b.value - a.value) : [];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-800">Lead Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1 font-medium">
+            Ranked retail lending prospects using transaction behaviour models.
+          </p>
+        </div>
+        <button
+          onClick={fetchLeads}
+          className="flex items-center gap-2 px-4 py-2 bg-[#F37021] hover:bg-[#d65f1a] text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh Data
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Total Database"
+            value={stats.total_customers.toLocaleString()}
+            icon={<Users className="w-6 h-6" />}
+            colorClass="text-[#00543B]"
+            bgClass="bg-[#00543B]/10"
+          />
+          <StatCard
+            label="Qualified Leads"
+            value={stats.total_leads.toLocaleString()}
+            icon={<TrendingUp className="w-6 h-6" />}
+            colorClass="text-[#138B7B]"
+            bgClass="bg-[#138B7B]/10"
+            subtext={`${((stats.total_leads / stats.total_customers) * 100).toFixed(0)}% qualified rate`}
+          />
+          <StatCard
+            label="Risk Suppressed"
+            value={stats.suppressed_count.toLocaleString()}
+            icon={<ShieldAlert className="w-6 h-6" />}
+            colorClass="text-red-600"
+            bgClass="bg-red-50"
+            subtext="Over-leveraged / stress flagged"
+          />
+          <StatCard
+            label="Average Score"
+            value={`${(stats.avg_composite_score * 100).toFixed(0)}%`}
+            icon={<BarChart3 className="w-6 h-6" />}
+            colorClass="text-[#F37021]"
+            bgClass="bg-[#F37021]/10"
+          />
+        </div>
+      )}
+
+      {/* Analytics Visualizations Section */}
+      {stats && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Risk Tiers Distribution */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4">Lending Risk Distribution</h3>
+            <div className="h-60 flex flex-col justify-between">
+              <ResponsiveContainer width="100%" height="85%">
+                <PieChart>
+                  <Pie
+                    data={riskChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {riskChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} customers`, 'Count']} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex justify-center gap-6 text-xs font-semibold">
+                {riskChartData.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span className="text-gray-600">{entry.name}: {entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Product Offer Distribution */}
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4">Target Product Suitability</h3>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsBarChart data={productChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} stroke="#CBD5E1" />
+                  <Tooltip formatter={(value) => [`${value} leads`, 'Eligible Leads']} />
+                  <RechartsBar dataKey="value" name="Eligible Leads" fill="#00543B" radius={[4, 4, 0, 0]} />
+                </RechartsBarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <FilterPanel
+        minScore={minScore}
+        setMinScore={setMinScore}
+        productType={productType}
+        setProductType={setProductType}
+        showSuppressed={showSuppressed}
+        setShowSuppressed={setShowSuppressed}
+      />
+
+      {/* Lead Table */}
+      <LeadTable leads={leads} loading={loading} />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+          <p className="text-sm text-gray-600">
+            Showing {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, total)} of {total} leads
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage(p => p - 1)}
+              className="px-3.5 py-1.5 text-sm font-semibold bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white rounded-lg transition-colors text-gray-700 shadow-sm"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-600 font-medium">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => p + 1)}
+              className="px-3.5 py-1.5 text-sm font-semibold bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white rounded-lg transition-colors text-gray-700 shadow-sm"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Disclaimer */}
+      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200/60 text-center">
+        <p className="text-xs text-gray-500 font-medium">
+          ⚠️ Demo Environment Disclaimer: All customer names, details, and UPI/AA transactions are synthetically generated.
+          In a production deployment, this engine directly consumes secure, consent-based bank data streams via Sahamati-compliant Account Aggregator API integrations.
+        </p>
+      </div>
+    </div>
+  );
+}

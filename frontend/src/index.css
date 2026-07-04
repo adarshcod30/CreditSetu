@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* IDBI Bank Brand Colors */
+  --idbi-green: #00543B;
+  --idbi-green-light: #006B4D;
+  --idbi-green-lighter: #00805C;
+  --idbi-teal: #138B7B;
+  --idbi-teal-light: #1AA393;
+  --idbi-orange: #F37021;
+  --idbi-orange-light: #F58A4B;
+  --idbi-red: #E8452D;
+
+  /* Light Theme */
+  --bg-primary: #F7F8FA;
+  --bg-secondary: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --border-color: #E2E8F0;
+  --text-primary: #1A202C;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --accent: var(--idbi-green);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Score badge animations */
+.score-badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all duration-200;
+}
+
+.score-badge:hover {
+  transform: scale(1.05);
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-all duration-200;
+}
+
+.card-hover:hover {
+  @apply shadow-lg;
+  transform: translateY(-1px);
+}
+
+/* IDBI Gradient text */
+.gradient-text {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(135deg, var(--idbi-green), var(--idbi-teal));
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* IDBI branded card shadow */
+.idbi-card {
+  @apply bg-white rounded-xl border border-gray-100 shadow-sm;
+}
+
+/* IDBI green gradient for headers */
+.idbi-header-gradient {
+  background: linear-gradient(135deg, var(--idbi-green) 0%, var(--idbi-teal) 100%);
+}

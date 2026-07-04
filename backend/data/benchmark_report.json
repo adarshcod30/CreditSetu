@@ -1,0 +1,45 @@
+{
+  "capacity_engine": {
+    "auc_roc": 0.9918,
+    "rmse": 2966.73,
+    "r2": 0.9279,
+    "n_train": 800,
+    "n_test": 200,
+    "description": "LightGBM regressor predicting safe monthly repayment capacity"
+  },
+  "intent_engine": {
+    "precision": 0.3394,
+    "recall": 0.4526,
+    "f1": 0.3879,
+    "true_positives": 282,
+    "false_positives": 549,
+    "false_negatives": 341,
+    "description": "Change-point detection (ruptures PELT) on daily net cash flow"
+  },
+  "guardrail_engine": {
+    "auc_roc": 0.7962,
+    "false_positive_rate": 0.1151,
+    "false_negative_rate": 0.3443,
+    "precision": 0.7143,
+    "recall": 0.6557,
+    "n_stressed": 305,
+    "n_safe": 695,
+    "description": "Hybrid hard-rules + LightGBM classifier for over-leverage detection"
+  },
+  "composite": {
+    "precision_at_top_20_pct": 0.995,
+    "total_qualified_leads": 722,
+    "total_suppressed": 278,
+    "qualification_rate": 0.722,
+    "description": "Weighted combination of Intent (0.4) and Capacity (0.6) scores"
+  },
+  "latency": {
+    "avg_ms": 21.06,
+    "p50_ms": 20.98,
+    "p95_ms": 21.67,
+    "p99_ms": 23.68,
+    "total_customers": 1000,
+    "description": "End-to-end scoring latency per customer (measured, not estimated)"
+  },
+  "generated_at": "2026-07-04T13:38:17.065742"
+}

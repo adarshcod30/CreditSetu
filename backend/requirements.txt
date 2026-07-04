@@ -1,0 +1,31 @@
+# CreditSetu Backend Dependencies
+# Python 3.11+
+
+# Web framework
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+
+# Database
+sqlalchemy==2.0.41
+aiosqlite==0.21.0
+
+# Data & ML
+pandas==2.3.0
+numpy==2.2.6
+scikit-learn==1.7.0
+lightgbm==4.6.0
+shap==0.46.0
+ruptures==1.1.9
+
+# Configuration
+pydantic==2.11.3
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+
+# Testing
+pytest==8.4.1
+httpx==0.28.1
+
+# Utilities
+python-json-logger==3.3.0
