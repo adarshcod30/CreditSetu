@@ -1,29 +1,31 @@
-# CreditSetu — AI Lead Intelligence Engine for Retail Lending
+# CreditSetu — Enterprise AI Lead Intelligence Engine for Retail Lending
 
-[![Hackathon Track](https://img.shields.io/badge/IDBI_Innovate_2026-Track_02-00543B.svg?style=flat-square)](https://www.idbi.bank)
-[![API Status](https://img.shields.io/badge/API-Connected-emerald.svg?style=flat-square)](#api-documentation)
-[![Database](https://img.shields.io/badge/Database-SQLite_Seeded-blue.svg?style=flat-square)](#database-schema)
-[![Platform](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue.svg?style=flat-square)](#tech-stack)
-[![Frontend](https://img.shields.io/badge/Frontend-React_18_Vite-138B7B.svg?style=flat-square)](#tech-stack)
+[![IDBI Bank Theme](https://img.shields.io/badge/Branding-IDBI_Bank_Light-00543B.svg?style=for-the-badge&logoColor=white)](https://www.idbi.bank)
+[![Hackathon Track](https://img.shields.io/badge/IDBI_Innovate_2026-Track_02-F37021.svg?style=for-the-badge)](https://www.idbi.bank)
+[![API Status](https://img.shields.io/badge/API-Connected-emerald.svg?style=for-the-badge)](#api-documentation)
+[![Database](https://img.shields.io/badge/Database-SQLite_Seeded-blue.svg?style=for-the-badge)](#database-schema)
+[![Platform Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
+[![Frontend Stack](https://img.shields.io/badge/Frontend-React_18%20%2B%20Vite-138B7B.svg?style=for-the-badge&logo=react&logoColor=white)](#tech-stack)
 
 CreditSetu is an enterprise-grade AI lead intelligence engine designed to identify, rank, and explain high-quality retail lending prospects from customer transaction data. 
 
-Targeting **Thin-File** and **New-To-Credit (NTC)** segments that traditional bureau-based scoring models cannot evaluate, CreditSetu leverages Account Aggregator-style behavioral streams to assess creditworthiness, detect real-time life-event triggers, estimate repayment capacity, and apply risk-mitigating guardrails.
+Specifically targeting **Thin-File** and **New-To-Credit (NTC)** segments that traditional bureau-based scoring models fail to evaluate, CreditSetu leverages Account Aggregator-style behavioral streams to assess creditworthiness, detect real-time life-event triggers, estimate repayment capacity, and apply risk-mitigating guardrails.
 
 ---
 
 ## 📖 Table of Contents
 1. [Core Features & Innovation](#-core-features--innovation)
 2. [Detailed System Architecture](#%EF%B8%8F-detailed-system-architecture)
-3. [Algorithmic & Mathematical Formulations](#-algorithmic--mathematical-formulations)
-4. [Performance & Code Optimizations](#-performance--code-optimizations)
-5. [Database Schema](#-database-schema)
-6. [API Documentation](#-api-documentation)
-7. [Model Benchmarking & Evaluation](#-model-benchmarking--evaluation)
-8. [Quick Start & Setup](#-quick-start--setup)
-9. [Project Directory Structure](#-project-directory-structure)
-10. [Developer Guidelines](#-developer-guidelines)
-11. [Disclaimer & Credits](#-disclaimer--credits)
+3. [Scoring Engines Deep Dive](#-scoring-engines-deep-dive)
+4. [Algorithmic & Mathematical Formulations](#-algorithmic--mathematical-formulations)
+5. [Performance & Code Optimizations](#-performance--code-optimizations)
+6. [Database Schema Reference](#-database-schema-reference)
+7. [API Specification & Payloads](#-api-specification--payloads)
+8. [Model Benchmarking & Evaluation](#-model-benchmarking--evaluation)
+9. [Quick Start & Installation](#-quick-start--installation)
+10. [Project Directory Tree](#-project-directory-tree)
+11. [Developer Guidelines](#-developer-guidelines)
+12. [Disclaimer & Credits](#-disclaimer--credits)
 
 ---
 
@@ -83,11 +85,33 @@ graph TB
 
 ---
 
+## ⚙️ Scoring Engines Deep Dive
+
+CreditSetu evaluates each customer profile across three independent behavioral scoring dimensions, which are then combined to form a final composite lead score.
+
+### 1. Intent Signal Detection Engine
+Traditional lead generation models are static, relying on pre-determined campaign lists. The **Intent Engine** monitors transaction streams in real-time to detect major financial changes (life-event triggers). Using the `ruptures` PELT change-point algorithm, it detects shifts in rolling daily cash flow. 
+
+If a customer's expenses drop significantly (e.g. they finish paying off an active loan), the engine flags an `emi_closure` event. If regular deposits step up, it flags an `income_step_up`. These triggers degrade exponentially over time, prioritizing recent signals to recommend the right loan products at the optimal time.
+
+### 2. Behavioral Capacity Scoring Engine
+Traditional credit scoring models reject thin-file or New-To-Credit (NTC) applicants because their CIBIL score is null. The **Capacity Engine** estimates repayment capacity by training a LightGBM Regressor on behavioral transaction features:
+-   **Income Stability ($income\_cv$):** Coefficient of variation of monthly income credits. Higher volatility lowers the capacity score.
+-   **Income Regularity ($income\_timing\_cv$):** Measures the consistency of salary deposit dates.
+-   **Rent Consistency:** Evaluates the regularity of rent outflows.
+-   **Spending Diversity ($entropy$):** Computes Shannon entropy on merchant categories. Highly concentrated spending (e.g. heavy cash withdrawals or gaming) lowers scoring.
+
+### 3. Risk Guardrail Engine
+The **Risk Guardrail Engine** protects the bank's asset quality. It combines hard rules with a machine learning classification model to filter out high-risk applicants:
+-   **Hard Rules:** Instantly suppresses any customer who has $\ge 2$ NACH debit bounces in the last 3 months, or has $> 5$ concurrent active micro-lenders.
+-   **ML Risk Classifier:** A LightGBM binary classifier predicts probability of repayment stress.
+-   **Operational Tiers:** Assigns leads to **Safe** (passed to dashboard), **Watch** (highlighted with orange alerts for manual underwriting), or **Suppress** (fully excluded from sales workflows).
+
+---
+
 ## 🔬 Algorithmic & Mathematical Formulations
 
 ### 1. Change-Point Detection (Ruptures PELT)
-To capture intent triggers without training data labels, the Intent Engine runs change-point detection on a customer's net daily cash flow. 
-
 Daily net flow $y_t$ is defined as credits minus debits on day $t$. To smooth monthly salary and rent spikes, the signal is smoothed with a 30-day rolling average:
 $$s_t = \frac{1}{30} \sum_{i=0}^{29} y_{t-i}$$
 
@@ -135,70 +159,78 @@ The pipeline is optimized to process **5,000 customers** with **3.87 Million tra
     ```python
     db.bulk_insert_mappings(Transaction, batch)
     ```
-    This reduced database insert latency for 3.87M rows from ~1.5 hours to **79.6 seconds**.
+    This reduced database insert latency for 3.87M rows from ~1.5 hours to **79.6 seconds**. Used in both CLI seeding and API dataset regeneration endpoints.
 
 ---
 
-## 🗄️ Database Schema
+## 🗄️ Database Schema Reference
 
 CreditSetu uses a single-file SQLite database. The schema is defined via SQLAlchemy ORM models:
 
 ### 1. `customers` Table
 Stores customer demographic data, persona types, and ground-truth validation targets.
 
-| Column Name | Data Type | Key/Index | Description |
-|---|---|---|---|
-| `customer_id` | `VARCHAR(20)` | Primary Key, Index | Unique customer ID (e.g. `CUST-00214`) |
-| `name` | `VARCHAR(100)` | - | Full name |
-| `age` | `INTEGER` | - | Age |
-| `gender` | `VARCHAR(1)` | - | `M` or `F` |
-| `occupation` | `VARCHAR(50)` | - | Profession/Industry |
-| `persona_type` | `VARCHAR(30)` | - | Salaried Stable, Gig Worker, NTC, etc. |
-| `bureau_score` | `FLOAT` (Nullable) | - | CIBIL credit score (null for NTC) |
-| `monthly_income` | `FLOAT` | - | Aggregated monthly income |
-| `emi_count` | `INTEGER` | - | Count of active loans |
-| `total_emi` | `FLOAT` | - | Sum of monthly EMI debits |
-| `true_repayment_capacity` | `FLOAT` | - | Ground truth capacity (validation only) |
-| `life_events` | `TEXT` | - | JSON list of ground-truth events |
+| Column Name | Data Type | Key/Index | Ingest Equivalent | Description |
+|---|---|---|---|---|
+| `customer_id` | `VARCHAR(20)` | Primary Key | CRM Profile ID | Unique identifier for the customer (e.g. `CUST-03085`) |
+| `name` | `VARCHAR(100)` | - | KYC Records | Full legal name of customer |
+| `age` | `INTEGER` | - | KYC Records | Customer age |
+| `gender` | `VARCHAR(1)` | - | KYC Records | Customer gender (M/F) |
+| `occupation` | `VARCHAR(100)` | - | HR / Employer registry | Profession category |
+| `persona_type` | `VARCHAR(50)` | - | Segment tagger | Behavioral persona (e.g. `salaried_stable`, `gig_worker`) |
+| `bureau_score` | `FLOAT` | Nullable | CIBIL Direct API | Bureau score. Null indicates New-to-Credit (NTC) |
+| `city` | `VARCHAR(50)` | - | KYC Records | Resident city location |
+| `account_open_date`| `VARCHAR(20)` | - | CBS account registry| Date the bank account was opened |
+| `monthly_income` | `FLOAT` | - | Income estimator | Inferred monthly baseline income |
+| `emi_count` | `INTEGER` | - | Active Loans Registry | Active loans count running in ledger |
+| `total_emi` | `FLOAT` | - | Active Loans Registry | Combined monthly EMI burden |
+| `true_repayment_capacity` | `FLOAT` | - | Ground truth simulator | True repayment capacity (validation only) |
+| `life_events` | `TEXT` | - | Ground truth simulator | JSON serialized list of validation events |
+| `observation_months` | `INTEGER` | - | Ledger observation | Months of history available in the ledger |
 
 ### 2. `transactions` Table
 Stores daily transactional ledger entries matching the Account Aggregator deposit schema.
 
-| Column Name | Data Type | Key/Index | Description |
-|---|---|---|---|
-| `id` | `INTEGER` | Primary Key | Auto-increment ID |
-| `txn_id` | `VARCHAR(30)` | Unique, Index | Unique transaction transaction ID |
-| `customer_id` | `VARCHAR(20)` | ForeignKey, Index | Link to `customers` table |
-| `date` | `VARCHAR(20)` | - | Transaction date (ISO string) |
-| `amount` | `FLOAT` | - | Transaction amount |
-| `type` | `VARCHAR(10)` | - | `credit` or `debit` |
-| `category` | `VARCHAR(50)` | - | salary, emi, rent, grocery, etc. |
-| `counterparty` | `VARCHAR(100)` | - | UPI VPA, Bank VPA, or payroll source |
-| `channel` | `VARCHAR(10)` | - | UPI, NEFT, RTGS, NACH |
-| `narration` | `VARCHAR(200)` | - | Raw bank ledger text string |
-| `is_bounce` | `BOOLEAN` | - | Flag indicating NACH debit return |
+| Column Name | Data Type | Key/Index | Ingest Equivalent | Description |
+|---|---|---|---|---|
+| `id` | `INTEGER` | Primary Key | System generated | Auto-increment ID |
+| `txn_id` | `VARCHAR(30)` | Unique, Index | AA Provider ID | Unique transaction hash |
+| `customer_id` | `VARCHAR(20)` | ForeignKey, Index | CBS ID | Link to `customers` table |
+| `date` | `VARCHAR(20)` | - | AA Provider Timestamp | Transaction date |
+| `amount` | `FLOAT` | - | AA Provider Value | Transaction value in INR |
+| `type` | `VARCHAR(10)` | - | AA Inflow/Outflow indicator | `credit` or `debit` |
+| `category` | `VARCHAR(50)` | - | Internal Classifier | Spent type (salary, emi, rent, grocery) |
+| `counterparty` | `VARCHAR(100)` | - | UPI VPA / Payroll Name | Payee / Payor ID |
+| `channel` | `VARCHAR(10)` | - | AA Provider metadata | UPI, NEFT, RTGS, NACH |
+| `narration` | `VARCHAR(200)` | - | Ledger string | Raw bank ledger string |
+| `is_bounce` | `BOOLEAN` | - | Return Code Handler | True if NACH returned due to insufficient funds |
 
 ### 3. `scores` Table
 Stores evaluation scoring output, risk categories, suggested products, and SHAP features.
 
-| Column Name | Data Type | Key/Index | Description |
-|---|---|---|---|
-| `customer_id` | `VARCHAR(20)` | Primary Key, Index | Link to `customers` table |
-| `intent_score` | `FLOAT` | - | Intent Engine raw score [0, 1] |
-| `intent_event_type` | `VARCHAR(50)` | - | Detected change-point event category |
-| `intent_event_recency_days` | `INTEGER` | - | Days since change-point occurred |
-| `capacity_score` | `FLOAT` | - | Normalized capacity score [0, 1] |
-| `capacity_amount` | `FLOAT` | - | Predicted safe monthly repayment capacity |
-| `guardrail_score` | `FLOAT` | - | Logit risk probability [0, 1] |
-| `guardrail_tier` | `VARCHAR(20)` | - | Safe, Watch, or Suppress |
-| `composite_score` | `FLOAT` | - | Final combined lead score [0, 1] |
-| `suggested_product` | `VARCHAR(50)` | - | Suggested product (Home Loan, CC, etc.) |
-| `explanation` | `TEXT` | - | SHAP NLG-generated attribution sentence |
-| `shap_contributions` | `TEXT` | - | JSON serialized list of relative SHAP values |
+| Column Name | Data Type | Key/Index | Ingest Equivalent | Description |
+|---|---|---|---|---|
+| `customer_id` | `VARCHAR(20)` | Primary Key, Index | Scoring linkage | Link to `customers` table |
+| `scored_at` | `VARCHAR(30)` | - | Pipeline clock | Generation timestamp |
+| `intent_score` | `FLOAT` | - | Intent Engine | Raw intent trigger score [0, 1] |
+| `intent_event_type` | `VARCHAR(50)` | - | Intent Engine | Type of life event detected |
+| `intent_event_recency_days` | `INTEGER` | - | Intent Engine | Days since change-point occurred |
+| `capacity_score` | `FLOAT` | - | Capacity Engine | Normalized repayment capacity [0, 1] |
+| `capacity_amount` | `FLOAT` | - | Capacity Engine | Inferred safe monthly capacity amount in INR |
+| `capacity_confidence` | `FLOAT` | - | Capacity Engine | Model confidence spread index |
+| `guardrail_score` | `FLOAT` | - | Guardrail Engine | Continuous risk probability [0, 1] |
+| `guardrail_tier` | `VARCHAR(20)` | - | Guardrail Engine | Risk category (Safe, Watch, Suppress) |
+| `guardrail_reasons` | `TEXT` | - | Guardrail Engine | JSON list of risk factors |
+| `composite_score` | `FLOAT` | - | Scorer Mixer | Weighted composite score [0, 1] |
+| `is_qualified_lead` | `BOOLEAN` | - | Decision Matrix | True if passed for sales distribution |
+| `suggested_product` | `VARCHAR(50)` | - | Decision Matrix | Target lending product recommended |
+| `explanation` | `TEXT` | - | SHAP NLG Engine | Text explanation of score drivers |
+| `shap_contributions` | `TEXT` | - | SHAP Explainer | JSON list of relative SHAP percentages |
+| `top_features` | `TEXT` | - | SHAP Explainer | JSON list of top 3 impact features |
 
 ---
 
-## 🔌 API Documentation
+## 🔌 API Specification & Payloads
 
 FastAPI exposes interactive Swagger docs at **`http://localhost:8000/docs`**.
 
@@ -264,6 +296,37 @@ Retrieves the score breakdown and normalized SHAP attributions for a single cust
     }
     ```
 
+#### 3. `GET /api/customers/db-stats/summary`
+Retrieves aggregated statistics of the seeded database for the frontend Data Engine view.
+*   **Sample Response:**
+    ```json
+    {
+      "total_customers": 5000,
+      "total_transactions": 3877572,
+      "total_scores": 5000,
+      "persona_distribution": {
+        "salaried_stable": 1750,
+        "gig_worker": 1000,
+        "new_to_credit": 750,
+        "over_leveraged": 750,
+        "self_employed": 750
+      },
+      "category_distribution": {
+        "groceries": 1010421,
+        "shopping": 810117,
+        "food_delivery": 606807,
+        "salary": 29260,
+        "emi": 84256,
+        "rent": 14194,
+        "nach_bounce": 2602
+      },
+      "total_bounces": 2602,
+      "ntc_count": 2075,
+      "has_bureau_count": 2925,
+      "avg_transactions_per_customer": 775.5
+    }
+    ```
+
 ---
 
 ## 📊 Model Benchmarking & Evaluation
@@ -295,7 +358,7 @@ python scripts/run_benchmark.py --n_customers 1000
 
 ---
 
-## 🚀 Quick Start & Setup
+## 🚀 Quick Start & Installation
 
 ### Option 1: Docker Compose (Recommended)
 This runs the entire stack in isolated Docker containers:
@@ -348,7 +411,7 @@ Open **`http://localhost:5173`** in your browser.
 
 ---
 
-## 📂 Project Directory Structure
+## 📂 Project Directory Tree
 
 ```
 CreditSetu/
@@ -385,7 +448,8 @@ CreditSetu/
         ├── pages/
         │   ├── LeadDashboard.jsx    # Leads page with Pie/Bar aggregate charts
         │   ├── CustomerDetail.jsx   # Profile page with SHAP and Timeline charts
-        │   └── BenchmarkView.jsx    # Evaluation page with ROC and metrics
+        │   ├── BenchmarkView.jsx    # Evaluation page with ROC and metrics
+        │   └── DataArchitectureView.jsx# Database explorer & metadata page
         ├── components/
         │   ├── LeadTable.jsx        # Lead list table with stable overlay loading
         │   ├── FilterPanel.jsx      # Multi-metric select dropdown panels
