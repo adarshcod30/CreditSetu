@@ -146,7 +146,7 @@ export default function BenchmarkView() {
         <div>
           <h4 className="text-sm font-bold text-[#00543B]">Production Environment Note</h4>
           <p className="text-xs text-emerald-800 mt-1 font-semibold leading-relaxed">
-            We are demonstrating 500 data in production but we have generated this metric for 5000 data in local environment to provide comprehensive statistical validation.
+            We are demonstrating 200 data in production but we have generated this metric for 5000 data in local environment to provide comprehensive statistical validation.
           </p>
         </div>
       </div>
