@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import api from './api/client';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, Wallet, Database } from 'lucide-react';
 import LeadDashboard from './pages/LeadDashboard';
@@ -25,6 +26,34 @@ function NavItem({ to, icon, label }) {
 }
 
 export default function App() {
+  const [apiStatus, setApiStatus] = useState('checking');
+  const [dbStatus, setDbStatus] = useState('checking');
+
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        const res = await api.healthCheck();
+        if (res.data.status === 'healthy') {
+          setApiStatus('connected');
+          if (res.data.customers_loaded > 0) {
+            setDbStatus('seeded');
+          } else {
+            setDbStatus('not_seeded');
+          }
+        } else {
+          setApiStatus('disconnected');
+          setDbStatus('checking');
+        }
+      } catch (err) {
+        setApiStatus('disconnected');
+        setDbStatus('checking');
+      }
+    }
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-[#F7F8FA] text-gray-900 flex flex-col">
@@ -60,13 +89,40 @@ export default function App() {
 
               {/* System status tags */}
               <div className="flex items-center gap-3">
-                <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-700">API: Connected</span>
-                </div>
-                <div className="px-3 py-1 bg-[#00543B]/10 rounded-full border border-[#00543B]/20 text-xs font-bold text-[#00543B]">
-                  Database: Seeded
-                </div>
+                {apiStatus === 'checking' && (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full border border-gray-200">
+                    <div className="w-2 h-2 rounded-full bg-gray-400 animate-pulse" />
+                    <span className="text-xs font-bold text-gray-500">API: Checking...</span>
+                  </div>
+                )}
+                {apiStatus === 'connected' && (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-200">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold text-emerald-700">API: Connected</span>
+                  </div>
+                )}
+                {apiStatus === 'disconnected' && (
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-red-50 rounded-full border border-red-200">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs font-bold text-red-700">API: Disconnected</span>
+                  </div>
+                )}
+
+                {dbStatus === 'checking' && (
+                  <div className="px-3 py-1 bg-gray-100 rounded-full border border-gray-200 text-xs font-bold text-gray-500">
+                    Database: Checking...
+                  </div>
+                )}
+                {dbStatus === 'seeded' && (
+                  <div className="px-3 py-1 bg-[#00543B]/10 rounded-full border border-[#00543B]/20 text-xs font-bold text-[#00543B]">
+                    Database: Seeded
+                  </div>
+                )}
+                {dbStatus === 'not_seeded' && (
+                  <div className="px-3 py-1 bg-red-50 rounded-full border border-red-200 text-xs font-bold text-red-600 animate-pulse">
+                    Database: Not Seeded
+                  </div>
+                )}
               </div>
             </div>
           </div>

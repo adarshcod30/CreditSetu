@@ -30,6 +30,7 @@ export default function LeadDashboard() {
   const [leads, setLeads] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [seedingStatus, setSeedingStatus] = useState('idle'); // 'idle', 'loading', 'success', 'error'
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState('1');
   const [total, setTotal] = useState(0);
@@ -112,13 +113,45 @@ export default function LeadDashboard() {
             Ranked retail lending prospects using transaction behaviour models.
           </p>
         </div>
-        <button
-          onClick={fetchLeads}
-          className="flex items-center gap-2 px-4 py-2 bg-[#F37021] hover:bg-[#d65f1a] text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh Data
-        </button>
+        <div className="flex flex-col items-end gap-1.5">
+          <button
+            onClick={async () => {
+              if (stats && stats.total_customers === 0) {
+                setSeedingStatus('loading');
+                try {
+                  await api.generateData({ n_customers: 5000, seed: 42 });
+                  setSeedingStatus('success');
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 1500);
+                } catch (err) {
+                  console.error('Failed to seed:', err);
+                  setSeedingStatus('error');
+                }
+              } else {
+                fetchLeads();
+              }
+            }}
+            disabled={loading || seedingStatus === 'loading'}
+            className="flex items-center gap-2 px-4 py-2 bg-[#F37021] hover:bg-[#d65f1a] disabled:opacity-50 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${(loading || seedingStatus === 'loading') ? 'animate-spin' : ''}`} />
+            {seedingStatus === 'loading' ? 'Seeding Database...' : 'Refresh Data'}
+          </button>
+          
+          {stats && stats.total_customers === 0 && seedingStatus === 'idle' && (
+            <span className="text-xs font-bold text-red-500">❌ Data not available</span>
+          )}
+          {seedingStatus === 'loading' && (
+            <span className="text-xs font-bold text-[#138B7B] animate-pulse">⏳ Data loading...</span>
+          )}
+          {seedingStatus === 'success' && (
+            <span className="text-xs font-bold text-emerald-600">✅ Data Loaded! Refreshing dashboard...</span>
+          )}
+          {seedingStatus === 'error' && (
+            <span className="text-xs font-bold text-red-600">⚠️ Seeding failed. Please check backend connection.</span>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
