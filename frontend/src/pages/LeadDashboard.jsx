@@ -31,6 +31,7 @@ export default function LeadDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [seedingStatus, setSeedingStatus] = useState('idle'); // 'idle', 'loading', 'success', 'error'
+  const [elapsedTime, setElapsedTime] = useState(0);
   const [page, setPage] = useState(1);
   const [pageInput, setPageInput] = useState('1');
   const [total, setTotal] = useState(0);
@@ -115,19 +116,61 @@ export default function LeadDashboard() {
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <button
-            onClick={async () => {
+            onClick={() => {
               if (stats && stats.total_customers === 0) {
                 setSeedingStatus('loading');
-                try {
-                  await api.generateData({ n_customers: 5000, seed: 42 });
-                  setSeedingStatus('success');
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 1500);
-                } catch (err) {
-                  console.error('Failed to seed:', err);
-                  setSeedingStatus('error');
-                }
+                setElapsedTime(0);
+
+                const timerInterval = setInterval(() => {
+                  setElapsedTime(prev => prev + 1);
+                }, 1000);
+
+                let isFinished = false;
+
+                const pollHealth = async () => {
+                  try {
+                    const res = await api.healthCheck();
+                    if (res.data.status === 'healthy' && res.data.customers_loaded > 0) {
+                      isFinished = true;
+                      clearInterval(timerInterval);
+                      clearInterval(pollInterval);
+                      setSeedingStatus('success');
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 1500);
+                    }
+                  } catch (e) {
+                    console.log('Waiting for backend response...', e);
+                  }
+                };
+
+                const pollInterval = setInterval(pollHealth, 5000);
+
+                api.generateData({ n_customers: 5000, seed: 42 })
+                  .then(() => {
+                    if (!isFinished) {
+                      isFinished = true;
+                      clearInterval(timerInterval);
+                      clearInterval(pollInterval);
+                      setSeedingStatus('success');
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 1500);
+                    }
+                  })
+                  .catch((err) => {
+                    console.log('Seeding request status pending on backend. Continuing background polling...', err);
+                  });
+
+                // Safety timeout after 10 minutes
+                setTimeout(() => {
+                  if (!isFinished) {
+                    isFinished = true;
+                    clearInterval(timerInterval);
+                    clearInterval(pollInterval);
+                    setSeedingStatus('error');
+                  }
+                }, 600000);
               } else {
                 fetchLeads();
               }
@@ -140,10 +183,12 @@ export default function LeadDashboard() {
           </button>
           
           {stats && stats.total_customers === 0 && seedingStatus === 'idle' && (
-            <span className="text-xs font-bold text-red-500">❌ Data not available</span>
+            <span className="text-xs font-bold text-red-500 animate-pulse">❌ Data not available</span>
           )}
           {seedingStatus === 'loading' && (
-            <span className="text-xs font-bold text-[#138B7B] animate-pulse">⏳ Data loading...</span>
+            <span className="text-xs font-bold text-[#138B7B] animate-pulse">
+              ⏳ Data loading... (Est: ~5-8 mins | Elapsed: {elapsedTime >= 60 ? `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s` : `${elapsedTime}s`})
+            </span>
           )}
           {seedingStatus === 'success' && (
             <span className="text-xs font-bold text-emerald-600">✅ Data Loaded! Refreshing dashboard...</span>

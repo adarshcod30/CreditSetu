@@ -32,11 +32,11 @@ export const api = {
 
   // Data generation
   generateData: (data = { n_customers: 1000, seed: 42 }) =>
-    client.post('/api/data/generate', data),
+    client.post('/api/data/generate', data, { timeout: 600000 }),
 
   // Benchmarks
   runBenchmark: () =>
-    client.post('/api/benchmark/run'),
+    client.post('/api/benchmark/run', {}, { timeout: 600000 }),
 
   getLatestBenchmark: () =>
     client.get('/api/benchmark/latest'),
