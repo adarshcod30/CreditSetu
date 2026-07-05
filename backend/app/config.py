@@ -5,15 +5,18 @@ Uses Pydantic Settings for environment variable management.
 All settings can be overridden via .env file or environment variables.
 """
 
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import Optional
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # points to backend/app/../ -> backend/
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Database
-    DATABASE_URL: str = "sqlite:///data/creditsetu.db"
+    DATABASE_URL: str = f"sqlite:///{BASE_DIR}/data/creditsetu.db"
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
@@ -26,12 +29,12 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
 
     # Model paths
-    CAPACITY_MODEL_PATH: str = "data/models/capacity_model.pkl"
-    GUARDRAIL_MODEL_PATH: str = "data/models/guardrail_model.pkl"
+    CAPACITY_MODEL_PATH: str = str(BASE_DIR / "data/models/capacity_model.pkl")
+    GUARDRAIL_MODEL_PATH: str = str(BASE_DIR / "data/models/guardrail_model.pkl")
 
     # Benchmark
-    BENCHMARK_REPORT_PATH: str = "data/benchmark_report.json"
-    BENCHMARK_REPORT_MD_PATH: str = "data/benchmark_report.md"
+    BENCHMARK_REPORT_PATH: str = str(BASE_DIR / "data/benchmark_report.json")
+    BENCHMARK_REPORT_MD_PATH: str = str(BASE_DIR / "data/benchmark_report.md")
 
     model_config = {
         "env_file": ".env",
