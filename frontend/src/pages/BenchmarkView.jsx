@@ -140,6 +140,17 @@ export default function BenchmarkView() {
         </button>
       </div>
 
+      {/* Notice Banner */}
+      <div className="bg-emerald-50 border border-emerald-200/80 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+        <Activity className="w-5 h-5 text-[#00543B] shrink-0 mt-0.5" />
+        <div>
+          <h4 className="text-sm font-bold text-[#00543B]">Production Environment Note</h4>
+          <p className="text-xs text-emerald-800 mt-1 font-semibold leading-relaxed">
+            We are demonstrating 500 data in production but we have generated this metric for 5000 data in local environment to provide comprehensive statistical validation.
+          </p>
+        </div>
+      </div>
+
       {error && !report && (
         <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-6 text-center">
           <p className="text-amber-800 font-semibold">{error}</p>
