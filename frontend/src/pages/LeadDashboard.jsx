@@ -146,7 +146,7 @@ export default function LeadDashboard() {
 
                 const pollInterval = setInterval(pollHealth, 5000);
 
-                api.generateData({ n_customers: 1000, seed: 42 })
+                api.generateData({ n_customers: 200, seed: 42 })
                   .then(() => {
                     if (!isFinished) {
                       isFinished = true;
@@ -187,7 +187,7 @@ export default function LeadDashboard() {
           )}
           {seedingStatus === 'loading' && (
             <span className="text-xs font-bold text-[#138B7B] animate-pulse">
-              ⏳ Data loading... (Est: ~45-75s | Elapsed: {elapsedTime >= 60 ? `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s` : `${elapsedTime}s`})
+              ⏳ Data loading... (Est: ~5-15s | Elapsed: {elapsedTime >= 60 ? `${Math.floor(elapsedTime / 60)}m ${elapsedTime % 60}s` : `${elapsedTime}s`})
             </span>
           )}
           {seedingStatus === 'success' && (

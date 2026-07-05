@@ -223,9 +223,17 @@ def generate_data(
         db.add(score_record)
     db.commit()
 
+    # Free up memory explicitly
+    n_txns = len(transactions_df)
+    del transactions_df
+    del customers_df
+    del features_df
+    import gc
+    gc.collect()
+
     return GenerateDataResponse(
-        message=f"Successfully generated {request.n_customers} customers with {len(transactions_df)} transactions",
+        message=f"Successfully generated {request.n_customers} customers with {n_txns} transactions",
         n_customers=request.n_customers,
-        n_transactions=len(transactions_df),
+        n_transactions=n_txns,
         seed=request.seed,
     )
