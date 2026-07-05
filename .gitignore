@@ -14,11 +14,12 @@ dist/
 .eslintcache
 
 # Local Database & Models (large binary files)
-*.db
 *.db-journal
-backend/data/*.db
 backend/data/*.db-journal
-backend/data/models/*.pkl
+
+# Allow committing pre-seeded DB and models
+!backend/data/creditsetu.db
+!backend/data/models/*.pkl
 
 # Environment Config
 .env
