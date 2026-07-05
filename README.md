@@ -7,9 +7,19 @@
 [![Platform Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![Frontend Stack](https://img.shields.io/badge/Frontend-React_18%20%2B%20Vite-138B7B.svg?style=for-the-badge&logo=react&logoColor=white)](#tech-stack)
 
+### 🚀 Live Production Deployment Links
+*   **Live Dashboard Web App:** [https://credit-setu-iota.vercel.app](https://credit-setu-iota.vercel.app)
+*   **Live API Documentation (Swagger Docs):** [https://creditsetu.onrender.com/docs](https://creditsetu.onrender.com/docs)
+*   **Live API Base URL:** [https://creditsetu.onrender.com](https://creditsetu.onrender.com)
+
+---
+
 CreditSetu is an enterprise-grade AI lead intelligence engine designed to identify, rank, and explain high-quality retail lending prospects from customer transaction data. 
 
 Specifically targeting **Thin-File** and **New-To-Credit (NTC)** segments that traditional bureau-based scoring models fail to evaluate, CreditSetu leverages Account Aggregator-style behavioral streams to assess creditworthiness, detect real-time life-event triggers, estimate repayment capacity, and apply risk-mitigating guardrails.
+
+> [!NOTE]
+> **Production Scale:** The live production environment is pre-seeded with **200 customers** (generating 152,545 transactions) to operate within Render's Free Tier memory ceiling (512MB RAM). However, the engine's data pipeline is fully scalable and was benchmarked locally on **5,000 customers** (3.87 Million transactions).
 
 ---
 
