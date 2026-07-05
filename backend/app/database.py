@@ -20,6 +20,12 @@ if db_url.startswith("postgres://"):
 
 if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+    import os
+    # Extract path from sqlite:///data/creditsetu.db
+    db_path = db_url.replace("sqlite:///", "", 1)
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not db_dir.startswith("memory"):
+        os.makedirs(db_dir, exist_ok=True)
 
 engine = create_engine(
     db_url,
