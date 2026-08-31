@@ -135,6 +135,27 @@ export default function CustomerDetail() {
             </div>
           )}
 
+          {/* Adverse Action Reasons — shown only when the customer was declined */}
+          {score?.adverse_action_reasons?.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-5 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">
+                Adverse Action Reasons
+              </h3>
+              <p className="text-xs text-amber-700 font-semibold mb-3">
+                Top factors behind this decline — the disclosure format required for fair-lending
+                compliance (e.g. ECOA Regulation B / RBI Fair Practices Code).
+              </p>
+              <ul className="space-y-1.5">
+                {score.adverse_action_reasons.map((reason, i) => (
+                  <li key={i} className="text-sm text-amber-900 font-medium flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Transaction Timeline */}
           <TransactionTimeline
             transactions={customer?.transactions || []}

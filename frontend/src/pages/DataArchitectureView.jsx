@@ -19,7 +19,7 @@ const TABLE_SCHEMAS = {
       { name: 'age', type: 'INTEGER', key: '-', source: 'KYC Document', desc: 'Age in years.' },
       { name: 'gender', type: 'VARCHAR(1)', key: '-', source: 'KYC Document', desc: 'Gender (M/F).' },
       { name: 'occupation', type: 'VARCHAR(50)', key: '-', source: 'Employer Registry', desc: 'Profession category (e.g. Software Engineer, Delivery Partner).' },
-      { name: 'persona_type', type: 'VARCHAR(30)', key: '-', source: 'Calibrated Archetype', desc: 'Behavioral segment (e.g. salaried_stable, gig_worker, ntc_no_bureau).' },
+      { name: 'persona_type', type: 'VARCHAR(30)', key: '-', source: 'Calibrated Archetype', desc: 'Behavioral segment (e.g. salaried_stable, gig_worker, new_to_credit).' },
       { name: 'bureau_score', type: 'FLOAT', key: 'NULLABLE', source: 'CIBIL Bureau Pull', desc: 'Traditional bureau score. Null represents New-to-Credit (NTC).' },
       { name: 'monthly_income', type: 'FLOAT', key: '-', source: 'Income Estimator', desc: 'Self-reported monthly income baseline.' },
       { name: 'emi_count', type: 'INTEGER', key: '-', source: 'Active Loans Registry', desc: 'Count of active loan accounts currently running.' },
@@ -316,10 +316,10 @@ export default function DataArchitectureView() {
             badgeClass="bg-emerald-50 text-emerald-800 border-emerald-200"
           />
           <PersonaCard
-            title="Salaried Unstable"
-            description="Represents mid-to-lower income corporate employees with occasional income delays or slightly higher transaction bounce counts."
-            markers={['Medium CIBIL score (600-680)', 'Varying monthly payroll credit dates', 'Occasional NACH return debits', 'High EMI burden ratio']}
-            fit="Moderate composite score, mapped for Auto Loans or Personal Loans with closer credit analyst watch."
+            title="Self-Employed / Merchant"
+            description="Represents shopkeepers and small business owners with irregular but detectable UPI merchant settlement inflows. Bureau history is mixed — some have a thin file, most don't."
+            markers={['Bureau score present ~40% of the time (mixed thin-file)', 'Irregular merchant settlement credits (UPI/GPay/PhonePe)', 'High income variability (CV ~0.40)', 'Lower rent-payment frequency than salaried personas']}
+            fit="Scored primarily on transaction behaviour; mapped to Personal Loans or Micro-Credit Lines depending on capacity."
             badgeClass="bg-amber-50 text-amber-800 border-amber-200"
           />
           <PersonaCard
