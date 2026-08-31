@@ -99,9 +99,37 @@ class ScoreResponse(BaseModel):
     explanation: str
     shap_contributions: list[ShapFeature] = []
     top_features: list[ShapFeature] = []
+    adverse_action_reasons: list[str] = []
     scored_at: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class AdhocTransaction(BaseModel):
+    """One transaction row for the bring-your-own-data adhoc scoring endpoint."""
+    date: str
+    amount: float = Field(ge=0)
+    type: str = Field(description="'credit' or 'debit'")
+    category: Optional[str] = None
+    counterparty: Optional[str] = None
+    channel: Optional[str] = None
+    is_bounce: bool = False
+
+
+class AdhocCustomer(BaseModel):
+    """Minimal customer profile for the adhoc scoring endpoint."""
+    customer_id: str
+    bureau_score: Optional[float] = None
+
+
+class AdhocScoreRequest(BaseModel):
+    """
+    Request body for POST /api/score/adhoc — score a customer's transactions
+    directly, without seeding them into the demo database first. This is the
+    "bring your own data" integration path.
+    """
+    customer: AdhocCustomer
+    transactions: list[AdhocTransaction] = Field(min_length=1)
 
 
 class LeadResponse(BaseModel):

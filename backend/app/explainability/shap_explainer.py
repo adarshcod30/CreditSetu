@@ -45,8 +45,8 @@ FEATURE_DISPLAY_NAMES = {
 # Templates for positive/negative contribution
 CONTRIBUTION_TEMPLATES = {
     "income_mean": {
-        "positive": "strong monthly income of ₹{value:,.0f}",
-        "negative": "limited monthly income of ₹{value:,.0f}",
+        "positive": "strong monthly income of {currency}{value:,.0f}",
+        "negative": "limited monthly income of {currency}{value:,.0f}",
     },
     "income_cv": {
         "positive": "highly stable income pattern (CV: {value:.2f})",
@@ -89,8 +89,8 @@ CONTRIBUTION_TEMPLATES = {
         "negative": "concentrated spending pattern",
     },
     "monthly_surplus": {
-        "positive": "healthy monthly surplus of ₹{value:,.0f}",
-        "negative": "limited monthly surplus of ₹{value:,.0f}",
+        "positive": "healthy monthly surplus of {currency}{value:,.0f}",
+        "negative": "limited monthly surplus of {currency}{value:,.0f}",
     },
     "has_bureau_score": {
         "positive": "bureau credit history available",
@@ -112,9 +112,11 @@ class ShapExplainer:
         self,
         capacity_model=None,
         guardrail_model=None,
+        currency_symbol: str = "₹",
     ):
         self.capacity_model = capacity_model
         self.guardrail_model = guardrail_model
+        self.currency_symbol = currency_symbol
         self.capacity_explainer = None
         self.guardrail_explainer = None
 
@@ -158,48 +160,11 @@ class ShapExplainer:
             return self._fallback_explanation(features, model_type)
 
         try:
-            # Prepare features
             X = self._prepare_features(features)
-            shap_values = explainer.shap_values(X)
+            shap_vals = self._extract_shap_row(explainer.shap_values(X), row_idx=0)
+            contributions = self._contributions_from_shap_row(shap_vals, features)
 
-            # Handle different SHAP output formats
-            if isinstance(shap_values, list):
-                # Binary classifier returns [class_0_values, class_1_values]
-                shap_vals = shap_values[1][0] if len(shap_values) > 1 else shap_values[0][0]
-            elif hasattr(shap_values, 'shape') and len(shap_values.shape) > 1:
-                shap_vals = shap_values[0]
-            else:
-                shap_vals = shap_values
-
-            # Calculate sum of absolute contributions to normalize
-            total_abs_contrib = sum(abs(float(shap_vals[i])) for i in range(len(self.feature_names)) if i < len(shap_vals))
-
-            # Build contribution list with relative percentage impact
-            contributions = []
-            for i, fname in enumerate(self.feature_names):
-                if i < len(shap_vals):
-                    raw_val = float(shap_vals[i])
-                    # Calculate percentage impact relative to total feature shift
-                    pct_impact = (raw_val / total_abs_contrib * 100) if total_abs_contrib > 0 else 0.0
-                    
-                    feat_val = features.get(fname)
-                    if feat_val is not None and pd.isna(feat_val):
-                        feat_val = None
-
-                    contributions.append({
-                        "feature": fname,
-                        "display_name": FEATURE_DISPLAY_NAMES.get(fname, fname),
-                        "value": feat_val,
-                        "contribution": round(pct_impact, 2),  # percentage impact
-                    })
-
-            # Sort by absolute contribution descending
-            contributions.sort(key=lambda x: abs(x["contribution"]), reverse=True)
-
-            # Top 3 features
             top_features = contributions[:3]
-
-            # Generate explanation text using the templates
             explanation_text = self._generate_explanation_text(top_features, features)
 
             return {
@@ -215,13 +180,87 @@ class ShapExplainer:
     def explain_batch(
         self, features_df: pd.DataFrame, model_type: str = "capacity"
     ) -> list[dict]:
-        """Generate explanations for multiple customers."""
-        results = []
-        for _, row in features_df.iterrows():
-            result = self.explain(row.to_dict(), model_type)
-            result["customer_id"] = row["customer_id"]
-            results.append(result)
-        return results
+        """
+        Generate explanations for multiple customers in one SHAP call.
+
+        Calling explainer.shap_values() once on the whole feature matrix is
+        far cheaper than once per row (SHAP's TreeExplainer is vectorized
+        internally) — the per-row loop below only builds display dictionaries
+        from an already-computed SHAP matrix, not a fresh SHAP computation.
+        """
+        explainer = (
+            self.capacity_explainer if model_type == "capacity"
+            else self.guardrail_explainer
+        )
+
+        if explainer is None or not HAS_SHAP:
+            results = []
+            for _, row in features_df.iterrows():
+                result = self._fallback_explanation(row.to_dict(), model_type)
+                result["customer_id"] = row["customer_id"]
+                results.append(result)
+            return results
+
+        try:
+            X = self._prepare_features_batch(features_df)
+            shap_values = explainer.shap_values(X)
+
+            results = []
+            for row_idx, (_, row) in enumerate(features_df.iterrows()):
+                features = row.to_dict()
+                shap_vals = self._extract_shap_row(shap_values, row_idx)
+                contributions = self._contributions_from_shap_row(shap_vals, features)
+                top_features = contributions[:3]
+                results.append({
+                    "customer_id": row["customer_id"],
+                    "shap_contributions": contributions,
+                    "top_features": top_features,
+                    "explanation_text": self._generate_explanation_text(top_features, features),
+                })
+            return results
+
+        except Exception as e:
+            warnings.warn(f"Batch SHAP explanation failed: {e}")
+            results = []
+            for _, row in features_df.iterrows():
+                result = self.explain(row.to_dict(), model_type)
+                result["customer_id"] = row["customer_id"]
+                results.append(result)
+            return results
+
+    def _extract_shap_row(self, shap_values, row_idx: int):
+        """Normalize SHAP's various output shapes to a 1-D array for one row."""
+        if isinstance(shap_values, list):
+            # Binary classifier returns [class_0_values, class_1_values]
+            matrix = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+            return matrix[row_idx]
+        if hasattr(shap_values, "shape") and len(shap_values.shape) > 1:
+            return shap_values[row_idx]
+        return shap_values
+
+    def _contributions_from_shap_row(self, shap_vals, features: dict) -> list[dict]:
+        """Build the sorted feature-contribution list for one row's SHAP values."""
+        total_abs_contrib = sum(abs(float(shap_vals[i])) for i in range(len(self.feature_names)) if i < len(shap_vals))
+
+        contributions = []
+        for i, fname in enumerate(self.feature_names):
+            if i < len(shap_vals):
+                raw_val = float(shap_vals[i])
+                pct_impact = (raw_val / total_abs_contrib * 100) if total_abs_contrib > 0 else 0.0
+
+                feat_val = features.get(fname)
+                if feat_val is not None and pd.isna(feat_val):
+                    feat_val = None
+
+                contributions.append({
+                    "feature": fname,
+                    "display_name": FEATURE_DISPLAY_NAMES.get(fname, fname),
+                    "value": feat_val,
+                    "contribution": round(pct_impact, 2),
+                })
+
+        contributions.sort(key=lambda x: abs(x["contribution"]), reverse=True)
+        return contributions
 
     @property
     def feature_names(self):
@@ -240,6 +279,17 @@ class ShapExplainer:
                 row[name] = float(val)
         return pd.DataFrame([row])
 
+    def _prepare_features_batch(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        """Vectorized equivalent of _prepare_features for a whole DataFrame."""
+        X = pd.DataFrame(index=features_df.index)
+        for name in self.feature_names:
+            col = features_df[name] if name in features_df.columns else pd.Series(float("nan"), index=features_df.index)
+            if name == "has_bureau_score":
+                X[name] = col.fillna(False).astype(bool).astype(int)
+            else:
+                X[name] = pd.to_numeric(col, errors="coerce")
+        return X
+
     def _generate_explanation_text(self, top_features: list[dict], features: dict) -> str:
         """Convert top SHAP features into a natural-language sentence."""
         parts = []
@@ -254,10 +304,10 @@ class ShapExplainer:
                 template = templates[direction]
                 try:
                     if value is not None:
-                        text = template.format(value=value)
+                        text = template.format(value=value, currency=self.currency_symbol)
                     else:
                         text = template.replace("({value:.0f})", "").replace("(CV: {value:.2f})", "")
-                        text = template.format(value=0) if "{value" in template else template
+                        text = template.format(value=0, currency=self.currency_symbol) if "{value" in template else template
                 except (ValueError, KeyError):
                     text = f"{FEATURE_DISPLAY_NAMES.get(fname, fname)}"
             else:
@@ -269,6 +319,26 @@ class ShapExplainer:
         if parts:
             return f"Score driven by {parts[0]}; {'; '.join(parts[1:])}" if len(parts) > 1 else f"Score driven by {parts[0]}"
         return "Insufficient data for detailed explanation"
+
+    def get_adverse_action_reasons(self, shap_contributions: list[dict], n: int = 4) -> list[str]:
+        """
+        Return the top-N negative factors in the standard "adverse action
+        reason code" format lenders must disclose when declining an
+        application (e.g. ECOA Regulation B in the US, RBI's Fair Practices
+        Code in India) — the same SHAP output already computed by explain(),
+        framed for the compliance use case it's built for.
+        """
+        negative = [c for c in shap_contributions if c.get("contribution", 0) < 0]
+        negative.sort(key=lambda c: c["contribution"])  # most negative first
+
+        reasons = []
+        for c in negative[:n]:
+            display = c.get("display_name") or c.get("feature", "unknown factor")
+            reasons.append(
+                f"{display} contributed negatively to this decision "
+                f"({abs(c['contribution']):.1f}% relative impact)"
+            )
+        return reasons
 
     def _fallback_explanation(self, features: dict, model_type: str) -> dict:
         """Fallback when SHAP is unavailable — use feature-value-based explanation."""

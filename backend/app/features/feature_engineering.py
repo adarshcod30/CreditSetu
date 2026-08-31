@@ -9,6 +9,7 @@ Features are designed to work even when bureau_score is missing (null),
 which is the core value proposition for NTC and gig-worker segments.
 """
 
+import logging
 import warnings
 from typing import Optional
 
@@ -21,6 +22,8 @@ try:
 except ImportError:
     HAS_RUPTURES = False
     warnings.warn("ruptures not installed — change-point detection will be skipped")
+
+logger = logging.getLogger(__name__)
 
 
 def engineer_features(
@@ -40,8 +43,9 @@ def engineer_features(
     if transactions_df.empty:
         return _empty_features(customer)
 
-    # Use the pre-converted transactions dataframe
-    txns = transactions_df
+    txns = _clean_transactions(transactions_df, customer.get("customer_id"))
+    if txns.empty:
+        return _empty_features(customer)
 
     # Separate credits and debits
     credits = txns[txns["type"] == "credit"]
@@ -112,6 +116,50 @@ def engineer_features_batch(
         all_features.append(features)
 
     return pd.DataFrame(all_features)
+
+
+def _clean_transactions(txns: pd.DataFrame, customer_id: Optional[str] = None) -> pd.DataFrame:
+    """
+    Guard against common data-quality issues in a raw transaction feed —
+    unparsed date/amount types, duplicate txn_id (double-submitted records),
+    non-positive amounts, and inconsistent case in type/category — instead of
+    letting them propagate silently into the feature computation. Logs what
+    it drops/coerces rather than swallowing it.
+
+    Runs on every call so engineer_features() is safe to call directly with
+    raw, un-pre-converted data (e.g. from an API request body), not only via
+    engineer_features_batch()'s pre-converted path.
+    """
+    txns = txns.copy()
+    original_len = len(txns)
+
+    if "date" in txns.columns and not pd.api.types.is_datetime64_any_dtype(txns["date"]):
+        txns["date"] = pd.to_datetime(txns["date"], errors="coerce")
+    if "amount" in txns.columns and not pd.api.types.is_numeric_dtype(txns["amount"]):
+        txns["amount"] = pd.to_numeric(txns["amount"], errors="coerce")
+    if "type" in txns.columns:
+        txns["type"] = txns["type"].astype(str).str.strip().str.lower()
+    if "category" in txns.columns:
+        txns["category"] = txns["category"].astype(str).str.strip().str.lower()
+    if "is_bounce" in txns.columns:
+        txns["is_bounce"] = txns["is_bounce"].where(txns["is_bounce"].notna(), False).astype(bool)
+
+    if "txn_id" in txns.columns:
+        txns = txns.drop_duplicates(subset="txn_id", keep="first")
+
+    if "date" in txns.columns:
+        txns = txns[txns["date"].notna()]
+    if "amount" in txns.columns:
+        txns = txns[txns["amount"] > 0]
+
+    if len(txns) < original_len:
+        logger.warning(
+            "customer %s: %d/%d transaction rows dropped during cleaning "
+            "(duplicates, non-positive amounts, or unparseable dates)",
+            customer_id, original_len - len(txns), original_len,
+        )
+
+    return txns
 
 
 def _compute_income_features(credits: pd.DataFrame, customer: dict) -> dict:
@@ -283,6 +331,9 @@ def _compute_category_entropy(debits: pd.DataFrame) -> float:
 
     cat_counts = spend_cats["category"].value_counts(normalize=True)
     entropy = -float((cat_counts * np.log2(cat_counts + 1e-10)).sum())
+    # A single category should be exactly 0 entropy; the epsilon above can
+    # otherwise leave a tiny negative float artifact.
+    entropy = max(entropy, 0.0)
 
     # Normalize to [0, 1] — max entropy for 8 categories = log2(8) ≈ 3
     return min(entropy / 3.0, 1.0)
@@ -374,7 +425,9 @@ def _detect_life_events(txns: pd.DataFrame) -> dict:
         }
 
     except Exception:
-        # Don't let change-point detection crash the pipeline
+        # Don't let change-point detection crash the pipeline — but do make
+        # the failure observable instead of silently vanishing.
+        logger.warning("Change-point detection failed for a customer; returning no detected events", exc_info=True)
         return default
 
 

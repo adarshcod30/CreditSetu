@@ -9,12 +9,11 @@ without a bureau_score still get scored. This is the core value proposition —
 NTC and gig-worker segments that traditional credit scoring systems can't evaluate.
 
 The training target (true_repayment_capacity) is a known synthetic function defined
-in the data generator. In production, this would be replaced by actual observed
-repayment behaviour (e.g., on-time repayment rates on existing loans).
+in the data generator by default. When a deployer has real historical repayment data,
+fit() accepts any customers_df carrying that target column — swap the synthetic
+target for actual observed repayment behaviour and retrain with no code changes.
 """
 
-import pickle
-import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -24,28 +23,35 @@ import lightgbm as lgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, roc_auc_score
 
+from .base import TrainableEngine
+from .. import model_registry
 from ..features.feature_engineering import ML_FEATURE_NAMES
+from ..scoring_profile import ScoringProfile, default_profile
 
 
-class CapacityEngine:
+class CapacityEngine(TrainableEngine):
     """
     Predicts safe monthly repayment capacity using behavioural features.
     """
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, profile: Optional[ScoringProfile] = None, model_path: Optional[str] = None):
         """
         Args:
+            profile: ScoringProfile supplying capacity_max_amount for score
+                normalization. Defaults to the built-in demo profile.
             model_path: Path to a saved model file. If None, model must be trained.
         """
+        self.profile = profile or default_profile()
         self.model: Optional[lgb.LGBMRegressor] = None
         self.feature_names = ML_FEATURE_NAMES
         self.model_path = model_path
+        self.metadata: dict = {}
         self._is_trained = False
 
-        if model_path and Path(model_path).exists():
+        if model_path and (Path(model_path).exists() or Path(model_path).with_suffix(".latest.json").exists()):
             self.load(model_path)
 
-    def train(
+    def fit(
         self,
         features_df: pd.DataFrame,
         customers_df: pd.DataFrame,
@@ -53,7 +59,7 @@ class CapacityEngine:
         seed: int = 42,
     ) -> dict:
         """
-        Train the capacity model on synthetic data.
+        Fit the capacity model.
 
         Args:
             features_df: DataFrame with engineered features (one row per customer)
@@ -131,7 +137,24 @@ class CapacityEngine:
             "n_test": len(X_test),
         }
 
+        # Kept for evaluation/metrics.py (KS-statistic, PSI) — not needed for
+        # normal scoring, only for benchmark_runner.py's deeper credit-scorecard
+        # metrics.
+        self._last_eval = {
+            "y_test_binary": y_test_binary,
+            "y_test_pred_proba": y_pred_proba,
+            "train_predictions": self.model.predict(X_train),
+            "test_predictions": y_pred,
+        }
+
         return self._train_metrics
+
+    @property
+    def last_eval(self) -> dict:
+        """Raw arrays from the most recent fit() call's held-out evaluation."""
+        if not hasattr(self, "_last_eval"):
+            raise RuntimeError("No evaluation data available — call fit() first.")
+        return self._last_eval
 
     def predict(self, features: dict) -> dict:
         """
@@ -142,12 +165,12 @@ class CapacityEngine:
 
         Returns:
             Dictionary with:
-            - capacity_amount: predicted safe monthly repayment in INR
+            - capacity_amount: predicted safe monthly repayment
             - capacity_score: normalized to [0, 1]
             - capacity_confidence: confidence band width
         """
         if not self._is_trained or self.model is None:
-            raise RuntimeError("Model not trained. Call train() or load() first.")
+            raise RuntimeError("Model not trained. Call fit() or load() first.")
 
         X = self._prepare_features(features)
         prediction = float(self.model.predict(X)[0])
@@ -156,7 +179,6 @@ class CapacityEngine:
         prediction = max(prediction, 0.0)
 
         # Get prediction spread from individual trees for confidence estimate
-        # LightGBM's raw predictions from each tree
         tree_preds = []
         for tree_idx in range(self.model.n_estimators_):
             try:
@@ -170,10 +192,7 @@ class CapacityEngine:
         else:
             confidence = prediction * 0.15
 
-        # Normalize to [0, 1] score
-        # Use empirical max from training distribution
-        max_capacity = 50000  # reasonable max for Indian retail lending context
-        capacity_score = min(prediction / max_capacity, 1.0)
+        capacity_score = min(prediction / self.profile.capacity_max_amount, 1.0)
 
         return {
             "capacity_amount": round(prediction, 0),
@@ -182,25 +201,55 @@ class CapacityEngine:
         }
 
     def predict_batch(self, features_df: pd.DataFrame) -> pd.DataFrame:
-        """Predict for multiple customers."""
-        results = []
-        for _, row in features_df.iterrows():
-            result = self.predict(row.to_dict())
-            result["customer_id"] = row["customer_id"]
-            results.append(result)
-        return pd.DataFrame(results)
+        """
+        Predict for multiple customers in one vectorized pass — builds the
+        feature matrix once and calls the model once per tree-slice instead of
+        once per customer, which is what makes this viable at real volume
+        (hundreds of thousands of rows) rather than one Python-level model
+        call per row.
+        """
+        if not self._is_trained or self.model is None:
+            raise RuntimeError("Model not trained. Call fit() or load() first.")
+
+        X = self._prepare_features_batch(features_df)
+        predictions = np.clip(self.model.predict(X), 0.0, None)
+
+        tree_preds = []
+        for tree_idx in range(self.model.n_estimators_):
+            try:
+                tree_preds.append(self.model.predict(X, start_iteration=tree_idx, num_iteration=1))
+            except Exception:
+                break
+
+        if tree_preds:
+            confidence = np.std(np.vstack(tree_preds), axis=0)
+        else:
+            confidence = predictions * 0.15
+
+        capacity_score = np.minimum(predictions / self.profile.capacity_max_amount, 1.0)
+
+        return pd.DataFrame({
+            "customer_id": features_df["customer_id"].values,
+            "capacity_amount": np.round(predictions, 0),
+            "capacity_score": np.round(capacity_score, 4),
+            "capacity_confidence": np.round(confidence, 0),
+        })
 
     def save(self, path: str) -> None:
-        """Save trained model to disk."""
+        """Save the fitted model to the versioned model registry."""
         if self.model is None:
             raise RuntimeError("No model to save")
-        with open(path, "wb") as f:
-            pickle.dump(self.model, f)
+        metadata = {
+            "engine": "CapacityEngine",
+            "profile_name": self.profile.name,
+            "feature_names": self.feature_names,
+            "metrics": getattr(self, "_train_metrics", {}),
+        }
+        model_registry.save(self.model, path, metadata)
 
     def load(self, path: str) -> None:
-        """Load trained model from disk."""
-        with open(path, "rb") as f:
-            self.model = pickle.load(f)
+        """Load the latest registered model version from path."""
+        self.model, self.metadata = model_registry.load(path)
         self._is_trained = True
 
     def _prepare_features(self, features: dict) -> pd.DataFrame:
@@ -215,3 +264,14 @@ class CapacityEngine:
             else:
                 row[name] = float(val)
         return pd.DataFrame([row])
+
+    def _prepare_features_batch(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        """Vectorized equivalent of _prepare_features for a whole DataFrame."""
+        X = pd.DataFrame(index=features_df.index)
+        for name in self.feature_names:
+            col = features_df[name] if name in features_df.columns else pd.Series(np.nan, index=features_df.index)
+            if name == "has_bureau_score":
+                X[name] = col.fillna(False).astype(bool).astype(int)
+            else:
+                X[name] = pd.to_numeric(col, errors="coerce")
+        return X

@@ -1,12 +1,13 @@
 """
-Synthetic customer generator for CreditSetu.
+Synthetic customer generator — the default demo data pack for CreditSetu.
 
 Generates realistic customer profiles across 5 persona archetypes that structurally
-mirror what an Indian bank would see via Account Aggregator integration.
+mirror what a lender would see via Account Aggregator integration in India.
 
-IMPORTANT: All data generated here is SYNTHETIC. In production, this module would be
-replaced by actual AA-integrated customer data from IDBI Bank's systems. The synthetic
-data is designed to be structurally equivalent for prototype demonstration purposes.
+IMPORTANT: All data generated here is SYNTHETIC, for demoing the engines without
+real customer data. A real deployment replaces this module with actual AA-integrated
+or core-banking-sourced customer data — see app/pipeline.py's data contract for the
+shape the scoring engines actually expect.
 
 Deterministic via numpy random seed for reproducible demo results.
 """

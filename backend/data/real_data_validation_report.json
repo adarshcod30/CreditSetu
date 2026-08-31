@@ -1,0 +1,36 @@
+{
+  "dataset": "Give Me Some Credit (OpenML mirror, id=45577)",
+  "dataset_url": "https://www.openml.org/search?type=data&id=45577",
+  "n_records": 117454,
+  "real_default_rate": 0.07,
+  "real_features_used": [
+    "concurrent_lender_count",
+    "emi_to_inflow_ratio",
+    "has_bureau_score",
+    "income_mean",
+    "monthly_surplus",
+    "nach_bounce_count_3m",
+    "nach_bounce_count_6m"
+  ],
+  "neutral_fill_features": [
+    "bureau_score",
+    "emi_to_inflow_trend",
+    "gig_pattern_score",
+    "income_cv",
+    "income_timing_cv",
+    "merchant_category_entropy",
+    "rent_consistency"
+  ],
+  "auc_roc": 0.8214,
+  "ks_statistic": 0.5179,
+  "gini_coefficient": 0.6428,
+  "population_stability_index": 0.0005,
+  "psi_interpretation": "stable",
+  "false_positive_rate": 0.0,
+  "false_negative_rate": 1.0,
+  "precision": 0,
+  "recall": 0.0,
+  "n_train": 93963,
+  "n_test": 23491,
+  "caveat": "7/14 model features have no equivalent in this dataset and are held at a neutral constant \u2014 this AUC is a lower bound on real discriminative power, not an apples-to-apples number against the synthetic benchmark."
+}

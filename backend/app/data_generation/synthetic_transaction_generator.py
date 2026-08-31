@@ -1,17 +1,18 @@
 """
-Synthetic transaction generator for CreditSetu.
+Synthetic transaction generator — the default demo data pack for CreditSetu.
 
 Generates 6-12 months of daily-level transaction data per customer that structurally
 mirrors Account Aggregator / UPI transaction data.
 
-IMPORTANT: All transactions are SYNTHETIC. In production, this data would come from
-IDBI Bank's Account Aggregator integration (AA framework by ReBIT/Sahamati).
+IMPORTANT: All transactions are SYNTHETIC, for demoing the engines without real
+customer data. A real deployment sources this from a bank's own Account Aggregator
+integration (e.g. India's AA framework by ReBIT/Sahamati) or core banking system.
 The transaction schema is designed to match the AA Deposit FI type schema:
 - transaction_type (Debit/Credit)
 - amount
 - narration (mirrors the free-text narration field in AA data)
-- counterparty (extracted from narration in production)
-- category (would be derived from narration parsing in production)
+- counterparty (extracted from narration in a real integration)
+- category (would be derived from narration parsing in a real integration)
 
 Deterministic via numpy random seed for reproducible results.
 """

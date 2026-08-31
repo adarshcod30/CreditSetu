@@ -17,6 +17,9 @@ dist/
 *.db-journal
 backend/data/*.db-journal
 
+# Downloaded third-party datasets (fetched on demand by scripts/validate_against_real_data.py)
+backend/data/external/
+
 # Allow committing pre-seeded DB and models
 !backend/data/creditsetu.db
 !backend/data/models/*.pkl

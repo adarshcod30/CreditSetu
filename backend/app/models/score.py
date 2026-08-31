@@ -45,6 +45,7 @@ class Score(Base):
     explanation = Column(Text)
     shap_contributions = Column(Text)  # JSON string
     top_features = Column(Text)  # JSON string
+    adverse_action_reasons = Column(Text)  # JSON string — top negative factors for decline disclosure
 
     # Relationship
     customer = relationship("Customer", back_populates="scores")

@@ -1,12 +1,15 @@
 """
-Persona definitions for synthetic customer generation.
+Persona definitions for the synthetic demo data generator.
 
 Each persona represents a distinct customer archetype commonly seen in Indian retail
-banking. The proportions reflect realistic population distributions — not an even split.
+banking — this is the default demo data pack; the scoring engines themselves don't
+depend on it. The proportions reflect realistic population distributions — not an
+even split.
 
 NOTE: These personas and their parameters are entirely synthetic, designed to
-structurally mirror the kinds of customers IDBI Bank would serve. In production,
-persona segmentation would be derived from actual Account Aggregator data.
+structurally mirror the kinds of customers a retail/digital lender would serve.
+In a real deployment, customer segmentation would be derived from actual
+Account Aggregator or core banking data — see app/pipeline.py's data contract.
 """
 
 from dataclasses import dataclass, field

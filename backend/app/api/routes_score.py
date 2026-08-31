@@ -4,24 +4,53 @@ Score and data generation API routes for CreditSetu.
 
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import math
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..database import get_db, init_db
+from ..database import get_db
 from ..models.customer import Customer
 from ..models.transaction import Transaction
 from ..models.score import Score
-from ..schemas.schemas import ScoreResponse, ShapFeature, GenerateDataRequest, GenerateDataResponse
+from ..config import settings
+from ..scoring_profile import profile_from_path_or_default
+from ..schemas.schemas import (
+    ScoreResponse,
+    ShapFeature,
+    GenerateDataRequest,
+    GenerateDataResponse,
+    AdhocScoreRequest,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Scoring"])
 
 
+def _sanitize_shap_features(raw_list: list[dict]) -> list[ShapFeature]:
+    """SHAP contributions can carry NaN for unavailable features — JSON can't
+    represent NaN, so normalize it to None before building the response model."""
+    sanitized = []
+    for item in raw_list:
+        val = item.get("value")
+        if val is not None and isinstance(val, float) and math.isnan(val):
+            item = {**item, "value": None}
+        sanitized.append(ShapFeature(**item))
+    return sanitized
+
+
+def _parse_json_list(raw: str | None) -> list:
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return [raw]
+
+
 @router.get("/score/{customer_id}", response_model=ScoreResponse)
 def get_score(customer_id: str, db: Session = Depends(get_db)):
     """Get full score breakdown with explainability for one customer."""
-    # Get latest score
     score = (
         db.query(Score)
         .filter(Score.customer_id == customer_id)
@@ -32,37 +61,20 @@ def get_score(customer_id: str, db: Session = Depends(get_db)):
     if not score:
         raise HTTPException(status_code=404, detail=f"No score found for customer {customer_id}")
 
-    # Parse JSON fields
-    guardrail_reasons = []
-    if score.guardrail_reasons:
-        try:
-            guardrail_reasons = json.loads(score.guardrail_reasons)
-        except (json.JSONDecodeError, TypeError):
-            guardrail_reasons = [score.guardrail_reasons]
+    guardrail_reasons = _parse_json_list(score.guardrail_reasons)
+    adverse_action_reasons = _parse_json_list(score.adverse_action_reasons)
 
-    import math
-    def sanitize_shap_features(raw_list):
-        sanitized = []
-        for item in raw_list:
-            val = item.get("value")
-            if val is not None and isinstance(val, float) and math.isnan(val):
-                item["value"] = None
-            sanitized.append(ShapFeature(**item))
-        return sanitized
-
-    shap_contributions = []
+    shap_contributions: list[ShapFeature] = []
     if score.shap_contributions:
         try:
-            raw = json.loads(score.shap_contributions)
-            shap_contributions = sanitize_shap_features(raw)
+            shap_contributions = _sanitize_shap_features(json.loads(score.shap_contributions))
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
-    top_features = []
+    top_features: list[ShapFeature] = []
     if score.top_features:
         try:
-            raw = json.loads(score.top_features)
-            top_features = sanitize_shap_features(raw)
+            top_features = _sanitize_shap_features(json.loads(score.top_features))
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
 
@@ -83,7 +95,66 @@ def get_score(customer_id: str, db: Session = Depends(get_db)):
         explanation=score.explanation or "",
         shap_contributions=shap_contributions,
         top_features=top_features,
+        adverse_action_reasons=adverse_action_reasons,
         scored_at=score.scored_at,
+    )
+
+
+@router.post("/score/adhoc", response_model=ScoreResponse)
+def score_adhoc(request: AdhocScoreRequest):
+    """
+    Score a customer's transactions directly from the request body — the
+    bring-your-own-data integration path. No demo database or prior seeding
+    required, only a customer + their transaction history matching the data
+    contract documented in app/pipeline.py. Uses whatever Capacity/Guardrail
+    models are currently registered (see POST /api/data/generate, or fit your
+    own via CreditIntelligencePipeline.fit()).
+    """
+    import pandas as pd
+    from ..pipeline import CreditIntelligencePipeline
+
+    profile = profile_from_path_or_default(settings.SCORING_PROFILE_PATH)
+    pipeline = CreditIntelligencePipeline(profile=profile)
+
+    try:
+        pipeline.load_models(settings.CAPACITY_MODEL_PATH, settings.GUARDRAIL_MODEL_PATH)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No trained models found. Call POST /api/data/generate first, "
+                "or train your own via CreditIntelligencePipeline.fit()."
+            ),
+        )
+
+    customer = request.customer.model_dump()
+    transactions = pd.DataFrame([t.model_dump() for t in request.transactions])
+
+    try:
+        result = pipeline.score_customer(customer, transactions)
+    except Exception as e:
+        logger.exception("Adhoc scoring failed for customer %s", customer.get("customer_id"))
+        raise HTTPException(status_code=422, detail=f"Could not score the supplied data: {e}")
+
+    return ScoreResponse(
+        customer_id=result["customer_id"],
+        composite_score=result["composite_score"],
+        intent_score=result["intent_score"],
+        intent_event_type=result["intent_event_type"],
+        intent_event_recency_days=result["intent_event_recency_days"],
+        capacity_score=result["capacity_score"],
+        capacity_amount=result["capacity_amount"],
+        capacity_confidence=result["capacity_confidence"],
+        guardrail_score=result["guardrail_score"],
+        guardrail_tier=result["guardrail_tier"],
+        guardrail_reasons=result["guardrail_reasons"],
+        is_qualified_lead=result["is_qualified_lead"],
+        suggested_product=result["suggested_product"],
+        explanation=result["explanation"],
+        shap_contributions=_sanitize_shap_features(result["shap_contributions"]),
+        top_features=_sanitize_shap_features(result["top_features"]),
+        adverse_action_reasons=result["adverse_action_reasons"],
+        scored_at=None,
     )
 
 
@@ -93,19 +164,16 @@ def generate_data(
     db: Session = Depends(get_db),
 ):
     """
-    Regenerate synthetic dataset.
+    Regenerate synthetic demo dataset and (re)fit the Capacity/Guardrail
+    models on it.
 
     WARNING: This wipes all existing data and repopulates.
     """
+    import os
     from ..data_generation.synthetic_customer_generator import generate_customers
     from ..data_generation.synthetic_transaction_generator import generate_all_transactions
     from ..features.feature_engineering import engineer_features_batch
-    from ..engines.intent_engine import IntentEngine
-    from ..engines.capacity_engine import CapacityEngine
-    from ..engines.guardrail_engine import GuardrailEngine
-    from ..engines.composite_scorer import CompositeScorer
-    from ..explainability.shap_explainer import ShapExplainer
-    import os
+    from ..pipeline import CreditIntelligencePipeline
 
     logger.info(f"Generating {request.n_customers} customers with seed={request.seed}")
 
@@ -115,10 +183,7 @@ def generate_data(
     db.query(Customer).delete()
     db.commit()
 
-    # Generate customers
     customers_df = generate_customers(n_customers=request.n_customers, seed=request.seed)
-
-    # Generate transactions
     transactions_df = generate_all_transactions(customers_df, seed=request.seed)
 
     # Store customers using bulk insert
@@ -165,60 +230,39 @@ def generate_data(
         db.bulk_insert_mappings(Transaction, batch)
         db.commit()
 
-    # Feature engineering
+    # Feature engineering — computed once, reused for both fit and score_batch below.
     features_df = engineer_features_batch(customers_df, transactions_df)
 
-    # Train engines
-    capacity_engine = CapacityEngine()
-    capacity_engine.train(features_df, customers_df)
+    profile = profile_from_path_or_default(settings.SCORING_PROFILE_PATH)
+    pipeline = CreditIntelligencePipeline(profile=profile)
+    pipeline.fit_from_features(features_df, customers_df)
 
-    guardrail_engine = GuardrailEngine()
-    guardrail_engine.train(features_df, customers_df)
-
-    # Save models
     os.makedirs("data/models", exist_ok=True)
-    capacity_engine.save("data/models/capacity_model.pkl")
-    guardrail_engine.save("data/models/guardrail_model.pkl")
+    pipeline.capacity_engine.save(settings.CAPACITY_MODEL_PATH)
+    pipeline.guardrail_engine.save(settings.GUARDRAIL_MODEL_PATH)
 
-    # Score all customers
-    intent_engine = IntentEngine()
-    scorer = CompositeScorer(intent_engine, capacity_engine, guardrail_engine)
+    # Score all customers — vectorized across the whole batch, not once per row.
+    scores_df = pipeline.score_batch(customers_df, transactions_df, features_df=features_df)
 
-    # SHAP explainer
-    explainer = ShapExplainer(
-        capacity_model=capacity_engine.model,
-        guardrail_model=guardrail_engine.model,
-    )
-
-    for _, row in features_df.iterrows():
-        features = row.to_dict()
-        score_result = scorer.score(features)
-
-        # Get SHAP explanation
-        shap_result = explainer.explain(features, model_type="capacity")
-
-        # Enhance explanation with SHAP text
-        explanation = score_result["explanation"]
-        if shap_result.get("explanation_text"):
-            explanation = shap_result["explanation_text"] + ". " + explanation
-
+    for _, row in scores_df.iterrows():
         score_record = Score(
             customer_id=row["customer_id"],
-            intent_score=score_result["intent_score"],
-            intent_event_type=score_result["intent_event_type"],
-            intent_event_recency_days=score_result["intent_event_recency_days"],
-            capacity_score=score_result["capacity_score"],
-            capacity_amount=score_result["capacity_amount"],
-            capacity_confidence=score_result["capacity_confidence"],
-            guardrail_score=score_result["guardrail_score"],
-            guardrail_tier=score_result["guardrail_tier"],
-            guardrail_reasons=json.dumps(score_result["guardrail_reasons"]),
-            composite_score=score_result["composite_score"],
-            is_qualified_lead=score_result["is_qualified_lead"],
-            suggested_product=score_result["suggested_product"],
-            explanation=explanation,
-            shap_contributions=json.dumps(shap_result.get("shap_contributions", [])),
-            top_features=json.dumps(shap_result.get("top_features", [])),
+            intent_score=row["intent_score"],
+            intent_event_type=row["intent_event_type"],
+            intent_event_recency_days=row["intent_event_recency_days"],
+            capacity_score=row["capacity_score"],
+            capacity_amount=row["capacity_amount"],
+            capacity_confidence=row["capacity_confidence"],
+            guardrail_score=row["guardrail_score"],
+            guardrail_tier=row["guardrail_tier"],
+            guardrail_reasons=json.dumps(row["guardrail_reasons"]),
+            composite_score=row["composite_score"],
+            is_qualified_lead=bool(row["is_qualified_lead"]),
+            suggested_product=row["suggested_product"],
+            explanation=row["explanation"],
+            shap_contributions=json.dumps(row["shap_contributions"]),
+            top_features=json.dumps(row["top_features"]),
+            adverse_action_reasons=json.dumps(row["adverse_action_reasons"]),
         )
         db.add(score_record)
     db.commit()

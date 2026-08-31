@@ -1,9 +1,10 @@
 """
 Benchmark runner for CreditSetu.
 
-Computes evaluation metrics for all three engines and the composite scorer.
-These numbers are the exact values that should be pasted into the pitch deck's
-benchmarking slide — pull them from the output, never hand-write a number.
+Computes evaluation metrics for all three engines and the composite scorer,
+including the credit-scorecard-standard metrics (KS-statistic, Gini
+coefficient, Population Stability Index) alongside generic AUC-ROC/RMSE.
+Pull numbers from this output rather than hand-writing them anywhere.
 
 Outputs: benchmark_report.json and benchmark_report.md
 """
@@ -33,6 +34,7 @@ from app.engines.intent_engine import IntentEngine
 from app.engines.capacity_engine import CapacityEngine
 from app.engines.guardrail_engine import GuardrailEngine
 from app.engines.composite_scorer import CompositeScorer
+from app.evaluation.metrics import ks_statistic, gini_coefficient, population_stability_index, psi_interpretation
 
 
 def run_full_benchmark(
@@ -70,9 +72,17 @@ def run_full_benchmark(
     # ─── Capacity Engine Benchmark ───────────────────────────────────
     print("\n[3/6] Benchmarking Capacity Engine...")
     capacity_engine = CapacityEngine()
-    capacity_metrics = capacity_engine.train(features_df, customers_df, test_size=test_size)
+    capacity_metrics = capacity_engine.fit(features_df, customers_df, test_size=test_size)
+    cap_eval = capacity_engine.last_eval
+    capacity_ks = ks_statistic(cap_eval["y_test_binary"], cap_eval["y_test_pred_proba"])
+    capacity_gini = gini_coefficient(capacity_metrics["auc_roc"])
+    capacity_psi = population_stability_index(cap_eval["train_predictions"], cap_eval["test_predictions"])
     report["capacity_engine"] = {
         "auc_roc": capacity_metrics["auc_roc"],
+        "ks_statistic": round(capacity_ks, 4),
+        "gini_coefficient": round(capacity_gini, 4),
+        "population_stability_index": round(capacity_psi, 4),
+        "psi_interpretation": psi_interpretation(capacity_psi),
         "precision": capacity_metrics["precision"],
         "recall": capacity_metrics["recall"],
         "rmse": capacity_metrics["rmse"],
@@ -81,8 +91,8 @@ def run_full_benchmark(
         "n_test": capacity_metrics["n_test"],
         "description": "LightGBM regressor predicting safe monthly repayment capacity",
     }
-    print(f"  AUC-ROC: {capacity_metrics['auc_roc']}")
-    print(f"  RMSE: ₹{capacity_metrics['rmse']:,.0f}")
+    print(f"  AUC-ROC: {capacity_metrics['auc_roc']} | KS: {capacity_ks:.4f} | Gini: {capacity_gini:.4f}")
+    print(f"  RMSE: {capacity_metrics['rmse']:,.0f}")
     print(f"  R²: {capacity_metrics['r2']}")
 
     # ─── Intent Engine Benchmark ─────────────────────────────────────
@@ -106,9 +116,17 @@ def run_full_benchmark(
     # ─── Guardrail Engine Benchmark ──────────────────────────────────
     print("\n[5/6] Benchmarking Guardrail Engine...")
     guardrail_engine = GuardrailEngine()
-    guardrail_metrics = guardrail_engine.train(features_df, customers_df, test_size=test_size)
+    guardrail_metrics = guardrail_engine.fit(features_df, customers_df, test_size=test_size)
+    guard_eval = guardrail_engine.last_eval
+    guardrail_ks = ks_statistic(guard_eval["y_test"], guard_eval["y_test_pred_proba"])
+    guardrail_gini = gini_coefficient(guardrail_metrics["auc_roc"])
+    guardrail_psi = population_stability_index(guard_eval["train_pred_proba"], guard_eval["test_pred_proba"])
     report["guardrail_engine"] = {
         "auc_roc": guardrail_metrics["auc_roc"],
+        "ks_statistic": round(guardrail_ks, 4),
+        "gini_coefficient": round(guardrail_gini, 4),
+        "population_stability_index": round(guardrail_psi, 4),
+        "psi_interpretation": psi_interpretation(guardrail_psi),
         "false_positive_rate": guardrail_metrics["false_positive_rate"],
         "false_negative_rate": guardrail_metrics["false_negative_rate"],
         "precision": guardrail_metrics["precision"],
@@ -117,7 +135,7 @@ def run_full_benchmark(
         "n_safe": guardrail_metrics["n_safe"],
         "description": "Hybrid hard-rules + LightGBM classifier for over-leverage detection",
     }
-    print(f"  AUC-ROC: {guardrail_metrics['auc_roc']}")
+    print(f"  AUC-ROC: {guardrail_metrics['auc_roc']} | KS: {guardrail_ks:.4f} | Gini: {guardrail_gini:.4f}")
     print(f"  False Positive Rate: {guardrail_metrics['false_positive_rate']}")
     print(f"  False Negative Rate: {guardrail_metrics['false_negative_rate']}")
 
@@ -159,7 +177,10 @@ def run_full_benchmark(
         "total_qualified_leads": int(scores_df["is_qualified_lead"].sum()),
         "total_suppressed": int((~scores_df["is_qualified_lead"]).sum()),
         "qualification_rate": round(float(scores_df["is_qualified_lead"].mean()), 4),
-        "description": "Weighted combination of Intent (0.4) and Capacity (0.6) scores",
+        "description": (
+            f"Weighted combination of Intent ({scorer.intent_weight}) and "
+            f"Capacity ({scorer.capacity_weight}) scores"
+        ),
     }
 
     report["latency"] = {
@@ -199,15 +220,24 @@ def _write_markdown_report(report: dict, path: str):
         "",
         f"*Generated: {report.get('generated_at', 'N/A')}*",
         "",
-        "> **Note**: All metrics are computed on synthetic data. In production, these would",
-        "> be validated against actual loan repayment outcomes.",
+        "> **Validation limitation**: these numbers are computed on synthetic data whose",
+        "> labels (`true_repayment_capacity`, `is_stressed`) are generated by the same",
+        "> formulas used to build the training features. That makes this an internal",
+        "> consistency check, not proof of real-world predictive power — the reported AUC",
+        "> partly reflects the model re-learning its own generator. `CapacityEngine.fit()`",
+        "> and `GuardrailEngine.fit()` accept any `customers_df` carrying the target column,",
+        "> so a real deployment should retrain against actual historical repayment/default",
+        "> outcomes before trusting these numbers operationally.",
         "",
         "## Capacity Engine",
         "",
         f"| Metric | Value |",
         f"|--------|-------|",
         f"| AUC-ROC | {report['capacity_engine']['auc_roc']} |",
-        f"| RMSE | ₹{report['capacity_engine']['rmse']:,.0f} |",
+        f"| KS-statistic | {report['capacity_engine']['ks_statistic']} |",
+        f"| Gini coefficient | {report['capacity_engine']['gini_coefficient']} |",
+        f"| PSI (train vs. test) | {report['capacity_engine']['population_stability_index']} ({report['capacity_engine']['psi_interpretation']}) |",
+        f"| RMSE | {report['capacity_engine']['rmse']:,.0f} |",
         f"| R² | {report['capacity_engine']['r2']} |",
         f"| Train/Test Split | {report['capacity_engine']['n_train']}/{report['capacity_engine']['n_test']} |",
         "",
@@ -227,6 +257,9 @@ def _write_markdown_report(report: dict, path: str):
         f"| Metric | Value |",
         f"|--------|-------|",
         f"| AUC-ROC | {report['guardrail_engine']['auc_roc']} |",
+        f"| KS-statistic | {report['guardrail_engine']['ks_statistic']} |",
+        f"| Gini coefficient | {report['guardrail_engine']['gini_coefficient']} |",
+        f"| PSI (train vs. test) | {report['guardrail_engine']['population_stability_index']} ({report['guardrail_engine']['psi_interpretation']}) |",
         f"| False Positive Rate | {report['guardrail_engine']['false_positive_rate']} |",
         f"| False Negative Rate | {report['guardrail_engine']['false_negative_rate']} |",
         f"| Precision | {report['guardrail_engine']['precision']} |",

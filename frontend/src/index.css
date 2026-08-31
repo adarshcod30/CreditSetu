@@ -5,15 +5,15 @@
 @tailwind utilities;
 
 :root {
-  /* IDBI Bank Brand Colors */
-  --idbi-green: #00543B;
-  --idbi-green-light: #006B4D;
-  --idbi-green-lighter: #00805C;
-  --idbi-teal: #138B7B;
-  --idbi-teal-light: #1AA393;
-  --idbi-orange: #F37021;
-  --idbi-orange-light: #F58A4B;
-  --idbi-red: #E8452D;
+  /* Default brand palette — override these to reskin for your own org */
+  --brand-green: #00543B;
+  --brand-green-light: #006B4D;
+  --brand-green-lighter: #00805C;
+  --brand-teal: #138B7B;
+  --brand-teal-light: #1AA393;
+  --brand-orange: #F37021;
+  --brand-orange-light: #F58A4B;
+  --brand-red: #E8452D;
 
   /* Light Theme */
   --bg-primary: #F7F8FA;
@@ -23,7 +23,7 @@
   --text-primary: #1A202C;
   --text-secondary: #64748B;
   --text-muted: #94A3B8;
-  --accent: var(--idbi-green);
+  --accent: var(--brand-green);
 }
 
 * {
@@ -77,10 +77,10 @@ body {
   transform: translateY(-1px);
 }
 
-/* IDBI Gradient text */
+/* Brand gradient text */
 .gradient-text {
   @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(135deg, var(--idbi-green), var(--idbi-teal));
+  background-image: linear-gradient(135deg, var(--brand-green), var(--brand-teal));
 }
 
 /* Pulse animation for live indicator */
@@ -93,12 +93,12 @@ body {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-/* IDBI branded card shadow */
-.idbi-card {
+/* Branded card shadow */
+.brand-card {
   @apply bg-white rounded-xl border border-gray-100 shadow-sm;
 }
 
-/* IDBI green gradient for headers */
-.idbi-header-gradient {
-  background: linear-gradient(135deg, var(--idbi-green) 0%, var(--idbi-teal) 100%);
+/* Brand gradient for headers */
+.brand-header-gradient {
+  background: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-teal) 100%);
 }

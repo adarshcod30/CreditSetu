@@ -17,38 +17,34 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 
-
-# Event type weights — how strongly each event type indicates loan-readiness
-EVENT_WEIGHTS = {
-    "emi_closure": 0.90,       # Very strong signal: freed-up repayment capacity
-    "income_step_up": 0.85,    # Strong signal: increased ability to service new debt
-    "positive_shift": 0.60,    # Moderate signal: general improvement in cash flow
-    "new_commitment": -0.30,   # Negative signal: reduced capacity
-    "negative_shift": -0.20,   # Weak negative signal
-}
-
-# Decay rate for recency weighting (per day)
-RECENCY_DECAY_RATE = 0.015  # score halves roughly every 46 days
+from .base import ScoringComponent
+from ..scoring_profile import ScoringProfile, default_profile
 
 
-class IntentEngine:
+class IntentEngine(ScoringComponent):
     """
     Scores customers based on detected life-event signals from their
     transaction cash flow patterns.
+
+    Stateless and rule-based — no model to fit, so it implements
+    ScoringComponent rather than the fit/predict TrainableEngine contract.
     """
 
     def __init__(
         self,
+        profile: Optional[ScoringProfile] = None,
         event_weights: Optional[dict[str, float]] = None,
-        decay_rate: float = RECENCY_DECAY_RATE,
+        decay_rate: Optional[float] = None,
     ):
         """
         Args:
-            event_weights: Override default event type weights.
-            decay_rate: Exponential decay rate for recency scoring.
+            profile: ScoringProfile supplying default event weights/decay rate.
+            event_weights: Explicit override for event type weights.
+            decay_rate: Explicit override for the recency decay rate.
         """
-        self.event_weights = event_weights or EVENT_WEIGHTS
-        self.decay_rate = decay_rate
+        self.profile = profile or default_profile()
+        self.event_weights = event_weights or self.profile.intent_event_weights
+        self.decay_rate = decay_rate if decay_rate is not None else self.profile.intent_decay_rate
 
     def score(self, features: dict) -> dict:
         """

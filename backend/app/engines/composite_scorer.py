@@ -6,11 +6,11 @@ ranked lead score with product suggestion and plain-language explanation.
 
 A lead only surfaces to the dashboard if Guardrail tier != "Suppress".
 
-Default weights: Intent (0.4) + Capacity (0.6). These are configurable
-because different bank strategies might weight intent-readiness vs.
-capacity differently. The 60/40 default reflects the idea that repayment
-capacity is a more fundamental lending signal, but intent-timing matters
-for conversion optimization.
+Weights, currency, and the product decision table all come from the
+ScoringProfile passed at construction time rather than being hardcoded here —
+a deployer changes lending policy by swapping the profile, not by editing
+this file. Defaults preserve the original demo behavior (Intent 0.4 /
+Capacity 0.6, ₹ currency, the original Home/Auto/Personal Loan tiers).
 """
 
 from typing import Optional
@@ -21,18 +21,7 @@ import pandas as pd
 from .intent_engine import IntentEngine
 from .capacity_engine import CapacityEngine
 from .guardrail_engine import GuardrailEngine
-
-
-# Default scoring weights — configurable
-DEFAULT_INTENT_WEIGHT = 0.40
-DEFAULT_CAPACITY_WEIGHT = 0.60
-
-# Product suggestion thresholds
-PRODUCT_RULES = {
-    "home_loan": {"min_capacity_amount": 25000, "min_income_mean": 60000},
-    "auto_loan": {"min_capacity_amount": 15000, "min_income_mean": 40000},
-    "personal_loan": {"min_capacity_amount": 5000, "min_income_mean": 15000},
-}
+from ..scoring_profile import ScoringProfile, default_profile
 
 
 class CompositeScorer:
@@ -45,14 +34,16 @@ class CompositeScorer:
         intent_engine: IntentEngine,
         capacity_engine: CapacityEngine,
         guardrail_engine: GuardrailEngine,
-        intent_weight: float = DEFAULT_INTENT_WEIGHT,
-        capacity_weight: float = DEFAULT_CAPACITY_WEIGHT,
+        profile: Optional[ScoringProfile] = None,
+        intent_weight: Optional[float] = None,
+        capacity_weight: Optional[float] = None,
     ):
         self.intent_engine = intent_engine
         self.capacity_engine = capacity_engine
         self.guardrail_engine = guardrail_engine
-        self.intent_weight = intent_weight
-        self.capacity_weight = capacity_weight
+        self.profile = profile or default_profile()
+        self.intent_weight = intent_weight if intent_weight is not None else self.profile.intent_weight
+        self.capacity_weight = capacity_weight if capacity_weight is not None else self.profile.capacity_weight
 
     def score(self, features: dict) -> dict:
         """
@@ -83,10 +74,11 @@ class CompositeScorer:
         is_qualified_lead = guardrail_result["guardrail_tier"] != "Suppress"
 
         # Suggest product based on capacity, income, and persona features
-        suggested_product = self._suggest_product(
-            capacity_result["capacity_amount"],
-            features.get("income_mean", 0),
-            features,
+        suggested_product = self.profile.select_product(
+            capacity_amount=capacity_result["capacity_amount"],
+            income_mean=features.get("income_mean", 0) or 0,
+            has_bureau_score=bool(features.get("has_bureau_score", True)),
+            gig_pattern_score=features.get("gig_pattern_score", 0.0) or 0.0,
         )
 
         # Build explanation (will be enhanced by SHAP in shap_explainer.py)
@@ -112,43 +104,58 @@ class CompositeScorer:
         }
 
     def score_batch(self, features_df: pd.DataFrame) -> pd.DataFrame:
-        """Score multiple customers and return ranked results."""
-        results = []
-        for _, row in features_df.iterrows():
-            result = self.score(row.to_dict())
-            result["customer_id"] = row["customer_id"]
-            results.append(result)
+        """
+        Score multiple customers and return ranked results.
 
-        df = pd.DataFrame(results)
-        # Sort by composite score descending
-        df = df.sort_values("composite_score", ascending=False).reset_index(drop=True)
-        return df
+        Runs each sub-engine's own vectorized batch method once across the
+        whole DataFrame, then combines results row-wise — avoids re-running
+        the intent/capacity/guardrail engines' expensive parts once per row.
+        """
+        intent_df = self.intent_engine.score_batch(features_df)
+        capacity_df = self.capacity_engine.predict_batch(features_df)
+        guardrail_df = self.guardrail_engine.evaluate_batch(features_df)
 
-    def _suggest_product(self, capacity_amount: float, income_mean: float, features: dict) -> str:
-        """Suggest the most appropriate loan product based on capacity, income, and persona."""
-        has_bureau = features.get("has_bureau_score", True)
-        gig_score = features.get("gig_pattern_score", 0.0)
+        merged = features_df[["customer_id"]].merge(
+            intent_df, on="customer_id"
+        ).merge(
+            capacity_df, on="customer_id"
+        ).merge(
+            guardrail_df, on="customer_id"
+        )
 
-        # Segment 1: Gig Workers & New-to-Credit (micro products)
-        if not has_bureau or gig_score > 0.40:
-            if capacity_amount >= 12000:
-                return "Personal Loan"
-            elif capacity_amount >= 5000:
-                return "Micro-Credit Line"
-            else:
-                return "Retail Credit Card"
+        composite = (
+            self.intent_weight * merged["intent_score"] +
+            self.capacity_weight * merged["capacity_score"]
+        ).clip(0.0, 1.0)
+        merged["composite_score"] = composite.round(4)
+        merged["is_qualified_lead"] = merged["guardrail_tier"] != "Suppress"
 
-        # Segment 2: Standard Borrowers (Auto / Home / Personal Loan)
-        if capacity_amount >= 32000 and income_mean >= 75000:
-            return "Home Loan"
+        features_by_id = features_df.set_index("customer_id")
+        suggested_products = []
+        explanations = []
+        for _, row in merged.iterrows():
+            features = features_by_id.loc[row["customer_id"]].to_dict()
+            features["customer_id"] = row["customer_id"]
+            suggested_products.append(self.profile.select_product(
+                capacity_amount=row["capacity_amount"],
+                income_mean=features.get("income_mean", 0) or 0,
+                has_bureau_score=bool(features.get("has_bureau_score", True)),
+                gig_pattern_score=features.get("gig_pattern_score", 0.0) or 0.0,
+            ))
+            explanations.append(self._build_explanation(
+                {
+                    "intent_score": row["intent_score"],
+                    "intent_event_type": row["intent_event_type"],
+                    "intent_event_recency_days": row["intent_event_recency_days"],
+                },
+                {"capacity_amount": row["capacity_amount"], "capacity_score": row["capacity_score"]},
+                {"guardrail_tier": row["guardrail_tier"], "guardrail_reasons": row["guardrail_reasons"]},
+                features,
+            ))
+        merged["suggested_product"] = suggested_products
+        merged["explanation"] = explanations
 
-        if capacity_amount >= 16000 and income_mean >= 40000:
-            return "Auto Loan"
-
-        if capacity_amount >= 5000:
-            return "Personal Loan"
-
-        return "Retail Credit Card"  # low capacity default
+        return merged.sort_values("composite_score", ascending=False).reset_index(drop=True)
 
     def _build_explanation(
         self,
@@ -164,15 +171,16 @@ class CompositeScorer:
         enriches this with feature-level attribution in shap_explainer.py.
         """
         parts = []
+        currency = self.profile.currency_symbol
 
         # Capacity explanation
         cap_amount = capacity_result["capacity_amount"]
         if capacity_result["capacity_score"] > 0.6:
-            parts.append(f"Strong repayment capacity (₹{cap_amount:,.0f}/month estimated)")
+            parts.append(f"Strong repayment capacity ({currency}{cap_amount:,.0f}/month estimated)")
         elif capacity_result["capacity_score"] > 0.3:
-            parts.append(f"Moderate repayment capacity (₹{cap_amount:,.0f}/month estimated)")
+            parts.append(f"Moderate repayment capacity ({currency}{cap_amount:,.0f}/month estimated)")
         else:
-            parts.append(f"Limited repayment capacity (₹{cap_amount:,.0f}/month estimated)")
+            parts.append(f"Limited repayment capacity ({currency}{cap_amount:,.0f}/month estimated)")
 
         # Key drivers
         drivers = []

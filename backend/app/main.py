@@ -1,11 +1,14 @@
 """
-CreditSetu — AI Lead Intelligence Engine for Retail Lending
+CreditSetu — general-purpose, explainable credit intelligence engine for
+thin-file and alternative-data lending.
 
-FastAPI application entrypoint.
-IDBI Innovate 2026 Hackathon, Track 02.
+FastAPI reference/demo application entrypoint — a thin API layer over the
+CreditIntelligencePipeline library (see app/pipeline.py). A host application
+embedding CreditSetu as a library doesn't need this file at all.
 
-IMPORTANT: All data in this system is SYNTHETIC. In production, customer data
-would be sourced via IDBI Bank's Account Aggregator integration.
+IMPORTANT: All data in this demo is SYNTHETIC. In a real deployment, customer
+data would come from a bank's own Account Aggregator or core banking
+integration — see app/pipeline.py's data contract for what's expected instead.
 """
 
 import logging
@@ -35,11 +38,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CreditSetu API",
     description=(
-        "AI Lead Intelligence Engine for Retail Lending. "
-        "Generates high-quality loan leads using Intent, Capacity, and Guardrail "
-        "scoring engines with SHAP-backed explainability. "
-        "\n\n⚠️ All data is synthetically generated for prototype demonstration. "
-        "In production, this would connect to IDBI Bank's Account Aggregator pipeline."
+        "General-purpose credit intelligence engine for thin-file and alternative-data "
+        "lending. Generates ranked, explainable loan leads using Intent, Capacity, and "
+        "Guardrail scoring engines with SHAP-backed explainability and adverse action "
+        "reason codes. "
+        "\n\n⚠️ This demo is seeded with synthetically generated data. In a real "
+        "deployment, connect your own transaction data via the /api/score/adhoc "
+        "endpoint or the CreditIntelligencePipeline library — see app/pipeline.py."
     ),
     version="1.0.0",
     lifespan=lifespan,

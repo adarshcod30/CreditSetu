@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # API
     API_PREFIX: str = "/api"
 
+    # Scoring policy — path to a ScoringProfile YAML file (see profiles/).
+    # None uses the built-in default profile.
+    SCORING_PROFILE_PATH: Optional[str] = None
+
     # Model paths
     CAPACITY_MODEL_PATH: str = str(BASE_DIR / "data/models/capacity_model.pkl")
     GUARDRAIL_MODEL_PATH: str = str(BASE_DIR / "data/models/guardrail_model.pkl")

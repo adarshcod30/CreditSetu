@@ -1,0 +1,48 @@
+# Default scoring profile — the original CreditSetu demo policy
+# (India retail lending, INR). Ships as the out-of-the-box behavior.
+name: default
+description: "Original CreditSetu demo policy — India retail lending, INR."
+
+org_name: CreditSetu
+currency_code: INR
+currency_symbol: "₹"
+
+intent_weight: 0.40
+capacity_weight: 0.60
+
+intent_event_weights:
+  emi_closure: 0.90
+  income_step_up: 0.85
+  positive_shift: 0.60
+  new_commitment: -0.30
+  negative_shift: -0.20
+intent_decay_rate: 0.015
+
+guardrail:
+  max_concurrent_lenders: 5
+  max_emi_to_inflow_ratio: 0.60
+  max_nach_bounces_3m: 1
+  watch_threshold: 0.30
+  suppress_threshold: 0.60
+
+capacity_max_amount: 50000.0
+
+thin_file_gig_score_threshold: 0.40
+standard_product_rules:
+  - name: Home Loan
+    min_capacity_amount: 32000
+    min_income_mean: 75000
+  - name: Auto Loan
+    min_capacity_amount: 16000
+    min_income_mean: 40000
+  - name: Personal Loan
+    min_capacity_amount: 5000
+    min_income_mean: 0
+thin_file_product_rules:
+  - name: Personal Loan
+    min_capacity_amount: 12000
+    min_income_mean: 0
+  - name: Micro-Credit Line
+    min_capacity_amount: 5000
+    min_income_mean: 0
+fallback_product: Retail Credit Card

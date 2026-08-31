@@ -12,7 +12,7 @@ const TABLE_SCHEMAS = {
   customers: {
     title: 'Customers Table (Demographics & Baseline Profiles)',
     description: 'Stores base customer records, demographic data, calibrated occupational personas, and credit bureau scores (if available).',
-    source: 'IDBI Core Banking System (CBS) & CRM Datasets',
+    source: 'Core Banking System (CBS) & CRM Datasets',
     columns: [
       { name: 'customer_id', type: 'VARCHAR(20)', key: 'PRIMARY KEY', source: 'CBS Ingest', desc: 'Unique alphanumeric identifier for the customer.' },
       { name: 'name', type: 'VARCHAR(100)', key: '-', source: 'KYC Document', desc: 'Full legal name retrieved during onboarding.' },
@@ -133,7 +133,7 @@ export default function DataArchitectureView() {
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight">CreditSetu Synthetic Data Engine</h1>
           <p className="text-sm mt-2 text-white/80 leading-relaxed font-medium">
-            In compliance with retail lending regulations and customer data privacy protections (DPDP Act), CreditSetu runs its evaluations on statistically calibrated synthetic data. The pipeline simulates complete transaction streams structurally identical to real Account Aggregator consent flows, allowing IDBI relationship managers to validate risk models and behavioral features safely.
+            In compliance with retail lending regulations and customer data privacy protections (e.g. India's DPDP Act), this demo runs its evaluations on statistically calibrated synthetic data. The pipeline simulates complete transaction streams structurally identical to real Account Aggregator consent flows, letting a lending team validate risk models and behavioral features safely before connecting real customer data.
           </p>
         </div>
       </div>

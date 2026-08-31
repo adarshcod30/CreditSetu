@@ -29,11 +29,8 @@ from app.models.score import Score
 from app.data_generation.synthetic_customer_generator import generate_customers
 from app.data_generation.synthetic_transaction_generator import generate_all_transactions
 from app.features.feature_engineering import engineer_features_batch
-from app.engines.intent_engine import IntentEngine
-from app.engines.capacity_engine import CapacityEngine
-from app.engines.guardrail_engine import GuardrailEngine
-from app.engines.composite_scorer import CompositeScorer
-from app.explainability.shap_explainer import ShapExplainer
+from app.pipeline import CreditIntelligencePipeline
+from app.scoring_profile import default_profile
 
 
 def seed_database(n_customers: int = 1000, seed: int = 42):
@@ -137,74 +134,59 @@ def seed_database(n_customers: int = 1000, seed: int = 42):
         print(f"  Computed {len(features_df.columns)} features")
         print(f"  Time: {time.time() - t0:.1f}s")
 
-        # ─── Train Models ────────────────────────────────────────────
-        print("\n[6/7] Training ML models...")
+        # ─── Fit Models ─────────────────────────────────────────────
+        print("\n[6/7] Fitting ML models...")
         t0 = time.time()
 
-        capacity_engine = CapacityEngine()
-        cap_metrics = capacity_engine.train(features_df, customers_df)
-        capacity_engine.save("data/models/capacity_model.pkl")
-        print(f"  Capacity Engine — AUC-ROC: {cap_metrics['auc_roc']}, RMSE: ₹{cap_metrics['rmse']:,.0f}")
+        pipeline = CreditIntelligencePipeline(profile=default_profile())
+        train_metrics = pipeline.fit_from_features(features_df, customers_df, seed=seed)
+        pipeline.capacity_engine.save("data/models/capacity_model.pkl")
+        pipeline.guardrail_engine.save("data/models/guardrail_model.pkl")
 
-        guardrail_engine = GuardrailEngine()
-        guard_metrics = guardrail_engine.train(features_df, customers_df)
-        guardrail_engine.save("data/models/guardrail_model.pkl")
+        cap_metrics = train_metrics["capacity_engine"]
+        guard_metrics = train_metrics["guardrail_engine"]
+        print(f"  Capacity Engine — AUC-ROC: {cap_metrics['auc_roc']}, RMSE: {cap_metrics['rmse']:,.0f}")
         print(f"  Guardrail Engine — AUC-ROC: {guard_metrics['auc_roc']}, FPR: {guard_metrics['false_positive_rate']}")
-
         print(f"  Time: {time.time() - t0:.1f}s")
 
         # ─── Score All Customers ─────────────────────────────────────
         print("\n[7/7] Scoring all customers...")
         t0 = time.time()
 
-        intent_engine = IntentEngine()
-        scorer = CompositeScorer(intent_engine, capacity_engine, guardrail_engine)
+        # Vectorized: feature engineering, engine inference, and SHAP
+        # explanation each run once across the whole batch rather than once
+        # per customer — this is what keeps this step tractable at volume.
+        scores_df = pipeline.score_batch(customers_df, transactions_df, features_df=features_df)
 
-        # SHAP explainer
-        explainer = ShapExplainer(
-            capacity_model=capacity_engine.model,
-            guardrail_model=guardrail_engine.model,
-        )
-
-        scored = 0
         tier_counts = {"Safe": 0, "Watch": 0, "Suppress": 0}
+        scored = 0
 
-        for _, row in features_df.iterrows():
-            features = row.to_dict()
-            score_result = scorer.score(features)
-
-            # Get SHAP explanation
-            shap_result = explainer.explain(features, model_type="capacity")
-
-            # Combine explanations
-            explanation = score_result["explanation"]
-            if shap_result.get("explanation_text"):
-                explanation = shap_result["explanation_text"] + ". " + explanation
-
+        for _, row in scores_df.iterrows():
             score_record = Score(
                 customer_id=row["customer_id"],
-                intent_score=score_result["intent_score"],
-                intent_event_type=score_result["intent_event_type"],
-                intent_event_recency_days=score_result["intent_event_recency_days"],
-                capacity_score=score_result["capacity_score"],
-                capacity_amount=score_result["capacity_amount"],
-                capacity_confidence=score_result["capacity_confidence"],
-                guardrail_score=score_result["guardrail_score"],
-                guardrail_tier=score_result["guardrail_tier"],
-                guardrail_reasons=json.dumps(score_result["guardrail_reasons"]),
-                composite_score=score_result["composite_score"],
-                is_qualified_lead=score_result["is_qualified_lead"],
-                suggested_product=score_result["suggested_product"],
-                explanation=explanation,
-                shap_contributions=json.dumps(shap_result.get("shap_contributions", [])),
-                top_features=json.dumps(shap_result.get("top_features", [])),
+                intent_score=row["intent_score"],
+                intent_event_type=row["intent_event_type"],
+                intent_event_recency_days=row["intent_event_recency_days"],
+                capacity_score=row["capacity_score"],
+                capacity_amount=row["capacity_amount"],
+                capacity_confidence=row["capacity_confidence"],
+                guardrail_score=row["guardrail_score"],
+                guardrail_tier=row["guardrail_tier"],
+                guardrail_reasons=json.dumps(row["guardrail_reasons"]),
+                composite_score=row["composite_score"],
+                is_qualified_lead=bool(row["is_qualified_lead"]),
+                suggested_product=row["suggested_product"],
+                explanation=row["explanation"],
+                shap_contributions=json.dumps(row["shap_contributions"]),
+                top_features=json.dumps(row["top_features"]),
+                adverse_action_reasons=json.dumps(row["adverse_action_reasons"]),
             )
             db.add(score_record)
 
-            tier_counts[score_result["guardrail_tier"]] += 1
+            tier_counts[row["guardrail_tier"]] += 1
             scored += 1
 
-            if scored % 200 == 0:
+            if scored % 500 == 0:
                 db.commit()
                 print(f"  Scored {scored}/{n_customers}")
 

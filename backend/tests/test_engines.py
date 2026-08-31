@@ -17,6 +17,7 @@ from app.engines.intent_engine import IntentEngine
 from app.engines.capacity_engine import CapacityEngine
 from app.engines.guardrail_engine import GuardrailEngine
 from app.engines.composite_scorer import CompositeScorer
+from app.scoring_profile import ScoringProfile, default_profile
 
 
 @pytest.fixture(scope="module")
@@ -30,14 +31,14 @@ def test_data():
 
 @pytest.fixture(scope="module")
 def trained_engines(test_data):
-    """Train engines on test data."""
+    """Fit engines on test data."""
     customers_df, _, features_df = test_data
 
     capacity = CapacityEngine()
-    capacity.train(features_df, customers_df)
+    capacity.fit(features_df, customers_df)
 
     guardrail = GuardrailEngine()
-    guardrail.train(features_df, customers_df)
+    guardrail.fit(features_df, customers_df)
 
     intent = IntentEngine()
 
@@ -183,13 +184,18 @@ class TestCompositeScorer:
                     "Suppressed customer should not be a qualified lead"
 
     def test_has_product_suggestion(self, test_data, trained_engines):
-        """All scored customers should have a product suggestion."""
+        """All scored customers should have a product suggestion from the default profile's catalog."""
         _, _, features_df = test_data
         intent, capacity, guardrail = trained_engines
         scorer = CompositeScorer(intent, capacity, guardrail)
 
-        result = scorer.score(features_df.iloc[0].to_dict())
-        assert result["suggested_product"] in {"Personal Loan", "Auto Loan", "Home Loan"}
+        valid_products = {
+            "Home Loan", "Auto Loan", "Personal Loan",
+            "Micro-Credit Line", "Retail Credit Card",
+        }
+        for _, row in features_df.head(10).iterrows():
+            result = scorer.score(row.to_dict())
+            assert result["suggested_product"] in valid_products
 
     def test_has_explanation(self, test_data, trained_engines):
         """All scored customers should have an explanation."""
@@ -200,3 +206,77 @@ class TestCompositeScorer:
         result = scorer.score(features_df.iloc[0].to_dict())
         assert result["explanation"] is not None
         assert len(result["explanation"]) > 10
+
+    def test_batch_matches_single_row_scoring(self, test_data, trained_engines):
+        """
+        score_batch()'s vectorized path must produce the same results as
+        calling score() once per row — this is the parity check for the
+        capacity/guardrail engines' vectorized predict_batch/evaluate_batch.
+        """
+        _, _, features_df = test_data
+        intent, capacity, guardrail = trained_engines
+        scorer = CompositeScorer(intent, capacity, guardrail)
+
+        subset = features_df.head(15).reset_index(drop=True)
+        batch_results = scorer.score_batch(subset).set_index("customer_id")
+
+        for _, row in subset.iterrows():
+            single_result = scorer.score(row.to_dict())
+            batch_row = batch_results.loc[row["customer_id"]]
+            assert batch_row["composite_score"] == pytest.approx(single_result["composite_score"], abs=1e-6)
+            assert batch_row["capacity_amount"] == pytest.approx(single_result["capacity_amount"], abs=1e-6)
+            assert batch_row["guardrail_tier"] == single_result["guardrail_tier"]
+            assert batch_row["suggested_product"] == single_result["suggested_product"]
+
+
+class TestScoringProfile:
+    """Test that swapping a ScoringProfile actually changes engine behavior."""
+
+    def test_custom_currency_appears_in_explanation(self, test_data, trained_engines):
+        _, _, features_df = test_data
+        intent, capacity, guardrail = trained_engines
+
+        custom_profile = default_profile().model_copy(deep=True)
+        custom_profile.currency_symbol = "$"
+        scorer = CompositeScorer(intent, capacity, guardrail, profile=custom_profile)
+
+        result = scorer.score(features_df.iloc[0].to_dict())
+        assert "$" in result["explanation"]
+        assert "₹" not in result["explanation"]
+
+    def test_tighter_guardrail_thresholds_suppress_more(self, test_data):
+        """A tighter profile's guardrail thresholds should be at least as strict."""
+        customers_df, _, features_df = test_data
+
+        loose_profile = ScoringProfile(name="loose")
+        tight_profile = ScoringProfile(name="tight")
+        tight_profile.guardrail.max_concurrent_lenders = 1
+        tight_profile.guardrail.suppress_threshold = 0.01
+
+        loose_guardrail = GuardrailEngine(profile=loose_profile)
+        loose_guardrail.fit(features_df, customers_df)
+        tight_guardrail = GuardrailEngine(profile=tight_profile)
+        tight_guardrail.fit(features_df, customers_df)
+
+        loose_suppressed = sum(
+            loose_guardrail.evaluate(row.to_dict())["guardrail_tier"] == "Suppress"
+            for _, row in features_df.iterrows()
+        )
+        tight_suppressed = sum(
+            tight_guardrail.evaluate(row.to_dict())["guardrail_tier"] == "Suppress"
+            for _, row in features_df.iterrows()
+        )
+        assert tight_suppressed >= loose_suppressed
+
+    def test_product_catalog_is_profile_driven(self):
+        """select_product must use the profile's own rules, not a hardcoded table."""
+        profile = ScoringProfile(
+            name="single-product",
+            standard_product_rules=[{"name": "Only Product", "min_capacity_amount": 0, "min_income_mean": 0}],
+            thin_file_product_rules=[{"name": "Only Product", "min_capacity_amount": 0, "min_income_mean": 0}],
+            fallback_product="Only Product",
+        )
+        product = profile.select_product(
+            capacity_amount=1.0, income_mean=1.0, has_bureau_score=True, gig_pattern_score=0.0,
+        )
+        assert product == "Only Product"

@@ -1,0 +1,41 @@
+# Example profile showing the SAME engine code serving a different lender/market
+# just by swapping config — no code changes. Numbers here are illustrative:
+# a tighter-risk-appetite digital lender running a USD micro-lending product
+# with a leaner product catalog.
+name: generic_digital_lender
+description: "Example profile: a USD digital micro-lender with tighter guardrails."
+
+org_name: "Example Digital Lender"
+currency_code: USD
+currency_symbol: "$"
+
+intent_weight: 0.50
+capacity_weight: 0.50
+
+intent_event_weights:
+  emi_closure: 0.90
+  income_step_up: 0.80
+  positive_shift: 0.55
+  new_commitment: -0.35
+  negative_shift: -0.25
+intent_decay_rate: 0.02
+
+guardrail:
+  max_concurrent_lenders: 3
+  max_emi_to_inflow_ratio: 0.45
+  max_nach_bounces_3m: 0
+  watch_threshold: 0.25
+  suppress_threshold: 0.50
+
+capacity_max_amount: 2000.0
+
+thin_file_gig_score_threshold: 0.30
+standard_product_rules:
+  - name: Installment Loan
+    min_capacity_amount: 300
+    min_income_mean: 800
+thin_file_product_rules:
+  - name: Micro Loan
+    min_capacity_amount: 100
+    min_income_mean: 0
+fallback_product: Starter Credit Line

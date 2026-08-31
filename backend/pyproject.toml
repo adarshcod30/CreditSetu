@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "creditsetu"
+version = "1.0.0"
+description = "General-purpose, explainable credit intelligence engine for thin-file and alternative-data lending — Intent, Capacity, and Guardrail scoring engines with SHAP-backed adverse action reasons."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+# Minimal core: enough to fit Capacity/Guardrail, run Intent's rule-based
+# scoring, and get a composite score back. SHAP explainability and
+# ruptures-based change-point detection are opt-in extras below — both
+# degrade gracefully at runtime if absent (HAS_SHAP / HAS_RUPTURES), so a
+# consumer who just wants scores isn't forced to install either.
+dependencies = [
+    "pandas>=2.3.0",
+    "numpy>=2.2.6",
+    "scikit-learn>=1.7.0",
+    "lightgbm>=4.6.0",
+    "pydantic>=2.11.3",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# SHAP feature attributions + adverse action reason codes
+explain = ["shap>=0.46.0"]
+# ruptures-based Intent Engine life-event/change-point detection
+intent = ["ruptures>=1.1.9"]
+# Everything the reference app uses
+full = ["shap>=0.46.0", "ruptures>=1.1.9"]
+# Run the FastAPI reference/demo application (backend/app/main.py) —
+# not needed to use CreditIntelligencePipeline as a library.
+api = [
+    "fastapi>=0.115.12",
+    "uvicorn[standard]>=0.34.3",
+    "sqlalchemy>=2.0.41",
+    "psycopg2-binary>=2.9.9",
+    "python-multipart>=0.0.20",
+    "pydantic-settings>=2.9.1",
+    "python-dotenv>=1.1.0",
+]
+dev = [
+    "pytest>=8.4.1",
+    "httpx>=0.28.1",
+    "pyarrow>=14.0.0",  # only for scripts/validate_against_real_data.py
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
