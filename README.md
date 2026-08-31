@@ -4,12 +4,13 @@
 
 ### An open-source, explainable credit intelligence engine for thin-file and alternative-data lending — pip-installable, currency/policy-configurable, and built to be embedded in your own lending stack
 
+[![PyPI](https://img.shields.io/pypi/v/creditsetu.svg?color=blue)](https://pypi.org/project/creditsetu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB.svg?logo=python&logoColor=white)](#tech-stack)
 [![Frontend](https://img.shields.io/badge/Frontend-React_18%20%2B%20Vite-138B7B.svg?logo=react&logoColor=white)](#tech-stack)
 [![API](https://img.shields.io/badge/API-FastAPI-009688.svg?logo=fastapi&logoColor=white)](#usage--api-reference)
 
-[**Live Dashboard**](https://credit-setu-iota.vercel.app) &nbsp;·&nbsp; [**Live API Docs**](https://creditsetu.onrender.com/docs) &nbsp;·&nbsp; [**Report an Issue**](https://github.com/adarshcod30/CreditSetu/issues)
+[**pip install creditsetu**](https://pypi.org/project/creditsetu/) &nbsp;·&nbsp; [**Live Dashboard**](https://credit-setu-iota.vercel.app) &nbsp;·&nbsp; [**Live API Docs**](https://creditsetu.onrender.com/docs) &nbsp;·&nbsp; [**Report an Issue**](https://github.com/adarshcod30/CreditSetu/issues)
 
 </div>
 
@@ -82,7 +83,7 @@ Globally, the same underwriting problem — score people alternative data can se
 | Scoring library | Python 3.11+, pandas, NumPy, scikit-learn, LightGBM, SHAP, ruptures, Pydantic |
 | Reference API | FastAPI, Uvicorn, SQLAlchemy (SQLite by default, Postgres-ready) |
 | Reference Frontend | React 18, Vite, Tailwind CSS, Recharts, React Router |
-| Packaging | `pyproject.toml` (setuptools) — `pip install -e ./backend` |
+| Packaging | Published on PyPI — `pip install creditsetu` (setuptools, published via GitHub Actions Trusted Publishing) |
 | Deployment | Render (API) + Vercel (dashboard) for the demo; Docker-friendly for anything else |
 
 ## System Architecture
@@ -146,19 +147,21 @@ sequenceDiagram
 
 ## Using CreditSetu as a Library
 
-Install the minimal core (`pandas`, `numpy`, `scikit-learn`, `lightgbm`, `pydantic`, `pyyaml` — no FastAPI, no SQLAlchemy, no SHAP, no ruptures):
+CreditSetu is published on PyPI. Install the minimal core (`pandas`, `numpy`, `scikit-learn`, `lightgbm`, `pydantic`, `pyyaml` — no FastAPI, no SQLAlchemy, no SHAP, no ruptures):
 
 ```bash
-pip install -e ./backend
+pip install creditsetu
 ```
 
 That's genuinely enough to fit and score — verified in a clean venv with nothing else installed. SHAP explainability and ruptures-based life-event detection are opt-in extras that degrade gracefully if skipped (you just get template-based explanations and no change-point events instead of an import error):
 
 ```bash
-pip install -e "./backend[explain]"   # + SHAP feature attributions / adverse action reasons
-pip install -e "./backend[intent]"    # + ruptures change-point life-event detection
-pip install -e "./backend[full]"      # everything the reference app uses
+pip install "creditsetu[explain]"   # + SHAP feature attributions / adverse action reasons
+pip install "creditsetu[intent]"    # + ruptures change-point life-event detection
+pip install "creditsetu[full]"      # both
 ```
+
+Working from a clone instead of PyPI (e.g. to modify the engines themselves)? `pip install -e ./backend` installs the same package in editable mode, same extras syntax.
 
 ```python
 from app.pipeline import CreditIntelligencePipeline
